@@ -1,0 +1,46 @@
+{
+  "name": "runograph",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check:local": "tsx scripts/check-local.ts",
+    "assets:pwa": "tsx scripts/generate-pwa-assets.ts"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "1.4.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@zip.js/zip.js": "2.23.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.53.0",
+    "papaparse": "5.7.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "3.10.1",
+    "tailwind-merge": "3.7.0",
+    "tailwindcss": "4.3.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "26.6.4",
+    "@types/papaparse": "5.5.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "prettier": "3.9.9",
+    "sharp": "0.35.5",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.3",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

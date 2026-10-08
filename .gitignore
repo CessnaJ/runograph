@@ -1,0 +1,21 @@
+# Private Samsung Health exports, including the existing extracted directory
+samsunghealth*/
+**/samsunghealth*/
+*.zip
+*.csv
+.local/
+private-data/
+test-results/
+playwright-report/
+
+# Application and tooling
+node_modules/
+dist/
+.vercel/
+.env*
+!.env.example
+.DS_Store
+coverage/
+
+# TypeScript build cache
+*.tsbuildinfo

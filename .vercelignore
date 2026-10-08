@@ -1,0 +1,10 @@
+samsunghealth*/
+**/samsunghealth*/
+**/*.zip
+**/*.csv
+.local/
+private-data/
+test-results/
+playwright-report/
+.git/
+.DS_Store
