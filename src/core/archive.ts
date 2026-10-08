@@ -46,7 +46,7 @@ export class Archive {
   ) {
     if (file.size > LIMITS.zip)
       throw new Error(
-        "ZIP이 512 MB 제한을 넘습니다. 더 작은 내보내기 파일을 선택해 주세요.",
+        "512 MB까지 읽을 수 있어요. 이 ZIP은 크기 제한을 넘었어요. 더 작은 내보내기 파일을 선택해 주세요.",
       );
     const archive = new Archive(file);
     const csv: FileEntry[] = [];
@@ -54,15 +54,19 @@ export class Archive {
     let count = 0;
     try {
       for await (const entry of archive.reader.getEntriesGenerator()) {
-        if (signal?.aborted) throw new Error("분석을 취소했습니다.");
+        if (signal?.aborted) throw new Error("분석을 취소했어요.");
         count++;
         if (count > LIMITS.entries)
-          throw new Error("ZIP 파일 수가 100,000개 제한을 넘습니다.");
+          throw new Error(
+            "ZIP 안의 파일이 10만 개 제한을 넘었어요. 더 작은 내보내기 파일을 선택해 주세요.",
+          );
         if (!safePath(entry.filename) || names.has(entry.filename))
-          throw new Error("ZIP에 안전하지 않거나 중복된 경로가 있습니다.");
+          throw new Error(
+            "ZIP 안에 읽을 수 없는 파일 경로나 중복된 파일이 있어요. 삼성헬스에서 다시 다운로드한 ZIP을 선택해 주세요.",
+          );
         names.add(entry.filename);
         if (count % 500 === 0)
-          progress(`파일 목록 확인 · ${count.toLocaleString()}개`, 0);
+          progress(`ZIP 안의 파일 확인 · ${count.toLocaleString()}개`, 0);
         if (entry.directory) continue;
         if (mainCsv(entry.filename)) csv.push(entry);
         else if (
@@ -78,10 +82,10 @@ export class Archive {
       if (csv.length !== 1)
         throw new Error(
           csv.length
-            ? "운동 CSV가 여러 개입니다. 하나의 삼성헬스 내보내기 ZIP을 선택해 주세요."
-            : "삼성헬스 운동 CSV를 찾지 못했습니다. 내보낸 원본 ZIP을 선택해 주세요.",
+            ? "여러 내보내기 파일이 섞여 있어요. 삼성헬스에서 다운로드한 ZIP 하나를 선택해 주세요."
+            : "삼성헬스 운동 기록을 찾지 못했어요. 삼성헬스에서 다운로드한 원본 ZIP을 선택해 주세요.",
         );
-      progress("러닝 요약 읽는 중", 10);
+      progress("러닝 기록을 읽고 있어요", 10);
       const result = parseExerciseCsv(
         await archive.read(csv[0], LIMITS.csv, signal),
       );
@@ -114,9 +118,11 @@ export class Archive {
     signal?: AbortSignal,
   ): Promise<string> {
     if (entry.directory || entry.encrypted)
-      throw new Error("암호화된 파일 또는 폴더는 읽을 수 없습니다.");
+      throw new Error(
+        "암호로 잠긴 파일은 읽을 수 없어요. 삼성헬스에서 다운로드한 원본 ZIP을 선택해 주세요.",
+      );
     if (entry.uncompressedSize > limit)
-      throw new Error("대상 파일의 압축 해제 크기가 제한을 넘습니다.");
+      throw new Error("ZIP 안의 파일이 읽기 크기 제한을 넘었어요.");
     let bytes = 0;
     const chunks: Uint8Array[] = [];
     try {
@@ -126,7 +132,9 @@ export class Archive {
             bytes += chunk.byteLength;
             this.used += chunk.byteLength;
             if (bytes > limit || this.used > LIMITS.total)
-              throw new Error("안전한 압축 해제 크기 제한을 넘었습니다.");
+              throw new Error(
+                "ZIP을 풀면서 읽을 수 있는 크기 제한을 넘었어요. 더 작은 내보내기 파일을 선택해 주세요.",
+              );
             chunks.push(chunk);
           },
         }),
@@ -142,7 +150,7 @@ export class Archive {
     } catch (error) {
       if (error instanceof Error && /제한/.test(error.message)) throw error;
       throw new Error(
-        "파일을 읽지 못했습니다. 손상·암호화·미지원 ZIP인지 확인해 주세요.",
+        "ZIP 파일을 읽지 못했어요. 손상되거나 암호로 잠겼을 수 있어요. 삼성헬스에서 다시 다운로드한 파일을 선택해 주세요.",
       );
     }
   }
@@ -158,7 +166,9 @@ export class Archive {
     }
     const entries = summary.reference ? this.json.get(summary.reference) : null;
     if (entries?.length !== 1)
-      throw new Error("연결된 상세 JSON이 없거나 참조가 모호합니다.");
+      throw new Error(
+        "이 러닝의 시간별 측정 파일을 찾지 못했어요. 파일이 없거나 같은 이름의 파일이 여러 개 있어요.",
+      );
     const detail = parseDetail(
       await this.read(entries[0], LIMITS.json, signal),
       summary,

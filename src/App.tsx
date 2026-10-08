@@ -1,3 +1,4 @@
+import { deviceLabel } from "./core/copy";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -253,7 +254,7 @@ export default function App() {
   function importFile(file: File) {
     reset();
     setBusy(true);
-    setProgress({ phase: "파일 목록 확인 중", percent: 0 });
+    setProgress({ phase: "ZIP 안의 파일을 확인하고 있어요", percent: 0 });
     const requestId = ++sequence.current;
     current.current.import = requestId;
     const next = new Worker(
@@ -295,7 +296,7 @@ export default function App() {
       setBusy(false);
       setDetailLoading(false);
       setError(
-        "분석 작업이 중단되었습니다. 메모리가 부족할 수 있습니다. 다른 탭을 닫고 ZIP을 다시 선택해 주세요.",
+        "기록을 읽는 도중 멈췄어요. 기기의 메모리가 부족할 수 있어요. 다른 탭을 닫고 ZIP 파일을 다시 선택해 주세요.",
       );
       next.terminate();
       worker.current = null;
@@ -369,7 +370,7 @@ export default function App() {
             <Button
               variant="ghost"
               className="icon-button"
-              aria-label="데이터 초기화"
+              aria-label="불러온 기록 지우기"
               onClick={reset}
             >
               <RotateCcw size={18} />
@@ -389,7 +390,7 @@ export default function App() {
         ref={input}
         type="file"
         accept=".zip,application/zip,application/x-zip-compressed"
-        aria-label="삼성헬스 ZIP 선택"
+        aria-label="삼성헬스 ZIP 불러오기"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -400,18 +401,18 @@ export default function App() {
         <main className="import-page">
           <div className="import-topline">
             <Leaf size={16} />
-            <span>기록은 기기 안에 머무릅니다</span>
+            <span>기록을 서버로 보내지 않아요</span>
           </div>
-          <p className="eyebrow">A QUIETER WAY TO READ YOUR RUNS</p>
+          <p className="eyebrow">삼성헬스 러닝 기록</p>
           <h1>
-            달린 만큼,
+            내 러닝의 변화를
             <br />
-            선명하게.
+            한눈에.
           </h1>
           <p className="intro-copy">
-            삼성헬스의 러닝 기록을
+            심박과 페이스를 함께 보고,
             <br />
-            조금 더 차분하게 읽는 방법.
+            지난 기록과 비교해 보세요.
           </p>
           <div className="import-art" aria-hidden="true">
             <svg viewBox="0 0 500 140" fill="none">
@@ -426,7 +427,7 @@ export default function App() {
                 strokeDasharray="2 8"
               />
             </svg>
-            <span>기록을 읽기 전의 빈 페이지</span>
+            <span>기록을 불러오면 실제 그래프를 볼 수 있어요</span>
           </div>
           {busy ? (
             <div className="import-progress" role="status">
@@ -435,9 +436,7 @@ export default function App() {
                 <span>{progress.percent ? `${progress.percent}%` : ""}</span>
               </div>
               <progress value={progress.percent} max="100" />
-              <p className="fine">
-                운동 CSV와 연결된 러닝 JSON만 읽고 있습니다.
-              </p>
+              <p className="fine">파일이 크면 시간이 걸릴 수 있어요.</p>
               <Button variant="outline" onClick={reset}>
                 <X size={16} />
                 분석 취소
@@ -450,13 +449,13 @@ export default function App() {
                 onClick={() => input.current?.click()}
               >
                 <FileArchive size={18} />
-                삼성헬스 ZIP 선택
+                삼성헬스 ZIP 불러오기
                 <ArrowUpRight size={18} />
               </Button>
               <p className="fine">
-                서버 전송 없이 브라우저에서 분석합니다.
+                선택한 파일은 이 기기에서만 읽어요.
                 <br />
-                ZIP 원본과 건강 데이터는 저장하지 않습니다.
+                다시 열 때는 ZIP 파일을 다시 선택해 주세요.
               </p>
             </>
           )}
@@ -476,37 +475,36 @@ export default function App() {
             </span>
             <span>
               <Check size={14} />
-              성장 비교
+              지난 기록과 비교
             </span>
           </div>
           <details className="import-help">
             <summary>ZIP은 어디에서 받나요?</summary>
             <p>
-              삼성헬스 → 설정 → 개인 데이터 다운로드에서 내보낸 원본 ZIP을
-              선택하세요. 메뉴 이름은 앱 버전에 따라 다를 수 있습니다.
+              삼성헬스의 설정에서 ‘개인 데이터 다운로드’를 찾아보세요.
+              다운로드한 ZIP 파일을 그대로 선택하면 돼요. 메뉴 이름은 앱 버전에
+              따라 달라질 수 있어요.
             </p>
             <p>
-              압축을 풀 필요가 없습니다. 새로고침하거나 탭을 닫으면 파일을 다시
-              선택해야 합니다. 512 MB 이하 파일을 지원하며, 휴대폰에서는 다른
-              탭을 닫고 분석해 주세요.
+              압축을 풀지 않아도 돼요. 512 MB 이하의 ZIP 파일을 읽을 수 있어요.
+              새로고침하거나 앱을 다시 열면 파일을 다시 선택해야 해요.
             </p>
           </details>
           <details className="import-help">
             <summary>홈 화면에 앱으로 추가하기</summary>
             <p>
-              Android에서는 브라우저 메뉴의 앱 설치 또는 홈 화면에 추가를,
-              iPhone에서는 Safari 공유 메뉴의 홈 화면에 추가를 선택하세요. 메뉴
-              이름과 지원 여부는 브라우저에 따라 다릅니다.
+              Android에서는 브라우저 메뉴에서 ‘앱 설치’나 ‘홈 화면에 추가’를
+              선택해 주세요. iPhone에서는 Safari의 공유 메뉴에서 ‘홈 화면에
+              추가’를 선택해 주세요.
             </p>
             <p>
-              앱을 열려면 인터넷 연결이 필요합니다. 기록은 저장하지 않으므로
-              다시 열 때 ZIP을 선택해 주세요.
+              지원 여부는 브라우저마다 달라요. 앱을 다시 열려면 인터넷 연결과
+              ZIP 파일이 필요해요.
             </p>
           </details>
           <p className="fine">
-            GPS·사진·프로필은 분석하지 않습니다. 외부 분석·오류 수집 서비스를
-            사용하지 않습니다. 그래프 위의 선은 화면 소개용 도형이며 분석 수치가
-            아닙니다.
+            GPS·사진·프로필은 읽지 않아요. 사용 기록이나 오류도 외부로 보내지
+            않아요. 위 그래프는 화면을 소개하는 예시예요.
           </p>
         </main>
       ) : (
@@ -535,8 +533,8 @@ export default function App() {
             {!(tab === "runs" && selected) && (
               <details className="global-filters">
                 <summary>
-                  {from || to || query ? "필터 적용 중" : "전체 기록"} ·{" "}
-                  {sessions.length}회 <span>기간·검색</span>
+                  {from || to || query ? "찾은 기록" : "전체 기록"} ·{" "}
+                  {sessions.length}회 <span>기간·검색 설정</span>
                 </summary>
                 <div className="filter-fields">
                   <label>
@@ -573,14 +571,14 @@ export default function App() {
                       setQuery("");
                     }}
                   >
-                    필터 초기화
+                    전체 기록 보기
                   </Button>
                 </div>
               </details>
             )}
             {data.warnings.length > 0 && !(tab === "runs" && selected) && (
               <details className="quality-warnings">
-                <summary>처리 안내 {data.warnings.length}건</summary>
+                <summary>기록 확인 안내 {data.warnings.length}건</summary>
                 {data.warnings.map((w, i) => (
                   <p key={i}>{w}</p>
                 ))}
@@ -589,7 +587,7 @@ export default function App() {
             <Suspense
               fallback={
                 <div className="loading-panel" role="status">
-                  화면 준비 중…
+                  화면을 준비하고 있어요…
                 </div>
               }
             >
@@ -609,7 +607,7 @@ export default function App() {
                   />
                 ) : (
                   <p className="empty-note">
-                    선택한 기간에 러닝 기록이 없습니다.
+                    이 조건에 맞는 러닝이 없어요. 기간이나 검색어를 바꿔보세요.
                   </p>
                 ))}
               {tab === "growth" &&
@@ -629,7 +627,7 @@ export default function App() {
                   />
                 ) : (
                   <p className="empty-note">
-                    선택한 기간에 러닝 기록이 없습니다.
+                    이 조건에 맞는 러닝이 없어요. 기간이나 검색어를 바꿔보세요.
                   </p>
                 ))}
               {tab === "runs" &&
@@ -665,20 +663,21 @@ export default function App() {
                           {summaryPace(selected) === null &&
                           selected.durationMs &&
                           selected.distanceM
-                            ? " · 요약 확인 필요"
+                            ? " · 시간·거리 확인 필요"
                             : ""}
                         </span>
                       </div>
                       <p className="fine">
-                        삼성 CSV 요약 · {selected.deviceGroup ?? "출처 미상"}
+                        삼성헬스에 저장된 요약 ·{" "}
+                        {deviceLabel(selected.deviceGroup)}
                         {selected.offsetMs === null
-                          ? " · UTC 날짜 / 시간대 미확인"
+                          ? " · 시간대 정보가 없어 UTC 날짜로 표시"
                           : ""}
                       </p>
                     </div>
                     {detailLoading ? (
                       <div className="loading-chart" role="status">
-                        상세 관측을 읽고 있습니다…
+                        시간별 측정값을 읽고 있어요…
                       </div>
                     ) : detail ? (
                       <RunChart
@@ -690,14 +689,14 @@ export default function App() {
                     ) : (
                       <div className="empty-note">
                         {detailError ||
-                          "이 기록에는 읽을 수 있는 상세 관측이 없습니다."}
+                          "시간별 측정값을 읽을 수 없어 그래프를 보여드리지 못해요."}
                       </div>
                     )}
                     <section className="quality-warnings">
                       <details>
-                        <summary>품질·원본 값과 분석 사용 설정</summary>
+                        <summary>원본·분석 설정</summary>
                         <p className="fine">
-                          삼성 원본: {duration(selected.durationMs)} ·{" "}
+                          삼성헬스 원본: {duration(selected.durationMs)} ·{" "}
                           {num(
                             selected.distanceM === null
                               ? null
@@ -710,8 +709,8 @@ export default function App() {
                               ? selected.durationMs / selected.distanceM
                               : null,
                           )}{" "}
-                          /km · 요약 심박 {num(selected.meanHr)} bpm. 원본을
-                          보정하지 않습니다.
+                          /km · 요약 평균 심박 {num(selected.meanHr)} bpm. 원본
+                          값은 변경하지 않아요.
                         </p>
                         {selected.quality?.map((q, i) => (
                           <p key={i}>
@@ -722,7 +721,7 @@ export default function App() {
                           </p>
                         ))}
                         {!selected.quality?.length && (
-                          <p>추가 품질 안내가 없습니다.</p>
+                          <p>시간·거리에서 확인할 문제는 없어요.</p>
                         )}
                         <label className="check-setting">
                           <input
@@ -736,7 +735,7 @@ export default function App() {
                               })
                             }
                           />
-                          요약 운동량에서 이 기록 제외
+                          총 거리·운동시간 계산에서 제외
                         </label>
                         {selected.quality?.some(
                           (q) => q.code === "short-record",
@@ -753,7 +752,7 @@ export default function App() {
                                 })
                               }
                             />
-                            짧은 기록을 유효한 분할 운동으로 포함
+                            분할 기록으로 합계에 포함
                           </label>
                         )}
                         <label className="check-setting">
@@ -766,12 +765,11 @@ export default function App() {
                               })
                             }
                           />
-                          성장 비교에서 이 러닝 제외
+                          지난 기록과 비교할 때 제외
                         </label>
                         <p className="fine">
-                          읽을 수 없는 값이나 관측 공백은 설정으로 유효 데이터가
-                          되지 않습니다. 상세 분석과 요약 운동량은 각각
-                          판단합니다.
+                          요약값에 문제가 있어도 시간별 측정값은 비교에 쓸 수
+                          있어요. 측정되지 않은 값은 채우지 않아요.
                         </p>
                       </details>
                     </section>
@@ -783,14 +781,14 @@ export default function App() {
                     </div>
                     <div className="list-controls">
                       <label>
-                        데이터 상태
+                        기록 상태
                         <select
-                          aria-label="기록 품질 필터"
+                          aria-label="기록 상태 필터"
                           value={qualityFilter}
                           onChange={(e) => setQualityFilter(e.target.value)}
                         >
                           <option value="all">전체</option>
-                          <option value="eligible">비교에 사용 가능</option>
+                          <option value="eligible">비교 구간 있는 기록</option>
                           <option value="review">확인 필요</option>
                         </select>
                       </label>
@@ -819,16 +817,16 @@ export default function App() {
                               {duration(s.durationMs)} · 심박 {num(s.meanHr)}{" "}
                               bpm ·{" "}
                               {s.status === "ready"
-                                ? "상세 관측 있음"
+                                ? "시간별 측정값 있음"
                                 : s.status === "missing"
-                                  ? "상세 없음"
+                                  ? "시간별 측정값 없음"
                                   : s.status === "limited"
-                                    ? "분석 제한"
-                                    : "상세 확인 필요"}
+                                    ? "일부 분석만 완료"
+                                    : "측정값을 읽지 못함"}
                               {!usesSummary(s, "pace")
-                                ? " · 요약 확인 필요"
+                                ? " · 시간·거리 확인 필요"
                                 : ""}
-                              {s.growthExcluded ? " · 성장 제외" : ""}
+                              {s.growthExcluded ? " · 비교에서 제외" : ""}
                             </small>
                           </div>
                           <div className="run-distance">
@@ -847,7 +845,10 @@ export default function App() {
                       ))}
                     </div>
                     {!listedSessions.length && (
-                      <p className="empty-note">조건에 맞는 기록이 없습니다.</p>
+                      <p className="empty-note">
+                        이 조건에 맞는 러닝이 없어요. 기록 상태나 검색 조건을
+                        바꿔보세요.
+                      </p>
                     )}
                   </>
                 ))}
@@ -858,7 +859,7 @@ export default function App() {
                   variant="outline"
                   onClick={() => setReportOpen(!reportOpen)}
                 >
-                  리포트 다운로드
+                  분석 결과 저장
                 </Button>
                 <Button variant="ghost" onClick={() => input.current?.click()}>
                   다른 ZIP 선택
@@ -867,9 +868,9 @@ export default function App() {
               {reportOpen && (
                 <div className="report-info">
                   <p>
-                    선택한 기간의 날짜·운동량·심박 수치·계산 기준을 JSON으로
-                    저장합니다. 이름·원본 파일명·UUID·GPS는 포함하지 않습니다.
-                    건강 수치가 있는 파일이므로 개인용으로 보관해 주세요.
+                    현재 선택한 기록의 날짜·운동량·심박과 비교 조건을 저장해요.
+                    파일 형식은 JSON이에요. 이름·기기 ID·GPS는 포함하지 않지만
+                    건강 수치가 있으니 공유 전에 내용을 확인해 주세요.
                   </p>
                   <Button
                     onClick={() => {
@@ -882,15 +883,15 @@ export default function App() {
                       setReportOpen(false);
                     }}
                   >
-                    JSON 저장
+                    JSON 파일로 저장
                   </Button>
                 </div>
               )}
               <p>
-                기록은 이 탭의 메모리에만 있습니다.
+                새로고침하면 ZIP 파일을 다시 선택해야 해요.
                 <br />
-                분석은 관찰을 돕습니다. 의료 진단이나 운동 처방을 제공하지
-                않습니다.
+                기록의 변화를 보여드려요. 건강 상태를 진단하거나 운동을
+                처방하지는 않아요.
               </p>
             </footer>
           </main>

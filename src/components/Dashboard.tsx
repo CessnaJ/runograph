@@ -1,3 +1,4 @@
+import { GROWTH_QUESTIONS, deviceLabel } from "../core/copy";
 import { useMemo } from "react";
 import {
   Bar,
@@ -72,59 +73,59 @@ export function Dashboard({
   return (
     <>
       <div className="page-heading compact-heading">
-        <h1>최근 러닝의 변화</h1>
+        <h1>최근 기록, 무엇이 달라졌나요?</h1>
         <p className="subtle">
           최근 {result.periods.recent.join("–")} · 이전{" "}
           {result.periods.previous.join("–")}
         </p>
       </div>
       <section className="summary-comparison">
-        <h3>비슷한 속도에서 심박이 달라졌나?</h3>
+        <h3>{GROWTH_QUESTIONS.heart}</h3>
         <p className="fine">
           {pace(cfg.target)} /km 부근 ·{" "}
-          {cfg.device === "all" ? "기기 혼합" : cfg.device}
+          {cfg.device === "all" ? "여러 기기" : deviceLabel(cfg.device)}
         </p>
         <ComparisonHeadline result={result} />
         <ComparisonPlot result={result} onOpen={onOpen} compact />
         <Button variant="outline" onClick={() => onGrowth(cfg)}>
-          비교 조건과 근거 보기 →
+          비교에 쓴 기록 보기 →
         </Button>
       </section>
       <section className="journal-section training-answer">
-        <h2>운동량은 어떻게 달라졌나?</h2>
+        <h2>얼마나 자주, 얼마나 오래 달렸나요?</h2>
         <p>
-          운동 일수 {trainingCompare.previous.days} →{" "}
+          달린 날 {trainingCompare.previous.days} →{" "}
           {trainingCompare.recent.days}일 · 운동시간{" "}
           {num(trainingCompare.previous.minutes)} →{" "}
           {num(trainingCompare.recent.minutes)}분
         </p>
         <p className="fine">
-          같은 길이의 두 기간에서 품질 조건에 맞는 기록 기준입니다. 수행량
-          변화이며 체력 향상 수치가 아닙니다.
+          같은 길이의 두 기간을 비교했어요. 운동량 변화가 체력 향상을 뜻하지는
+          않아요.
         </p>
       </section>
       <section className="journal-section">
         <div className="section-heading">
-          <h2>선택한 기록의 운동량</h2>
-          <span className="subtle">가져온 {stats.count}회</span>
+          <h2>선택한 기록 한눈에</h2>
+          <span className="subtle">러닝 {stats.count}회</span>
         </div>
         <div className="primary-stats">
           <div>
-            <small>활동 일수</small>
+            <small>달린 날</small>
             <strong>
               {new Set(sessions.filter(datedActivity).map((s) => s.date)).size}
               <em>일</em>
             </strong>
           </div>
           <div>
-            <small>거리 · 사용 {stats.distanceSessions}회</small>
+            <small>총 거리 · {stats.distanceSessions}회</small>
             <strong>
               {num(stats.distanceM === null ? null : stats.distanceM / 1000, 1)}
               <em>km</em>
             </strong>
           </div>
           <div>
-            <small>운동시간 · 사용 {stats.durationSessions}회</small>
+            <small>총 운동시간 · {stats.durationSessions}회</small>
             <strong className="time-stat">{duration(stats.durationMs)}</strong>
           </div>
         </div>
@@ -136,13 +137,13 @@ export function Dashboard({
             </b>
           </div>
           <div>
-            <span>기록 중앙 페이스</span>
+            <span>러닝별 중앙 페이스</span>
             <b>
               {pace(stats.medianPace)} <small>/km</small>
             </b>
           </div>
           <div>
-            <span>관측 평균 심박</span>
+            <span>측정된 평균 심박</span>
             <b>
               {num(stats.meanHr)} <small>bpm</small>
             </b>
@@ -155,16 +156,23 @@ export function Dashboard({
           </div>
         </div>
         <details>
-          <summary>원본 합계 보기 · 제외와 출처</summary>
+          <summary>원본 합계와 계산에 쓴 기록</summary>
           <p className="fine">
-            삼성 CSV 원본 합계:{" "}
+            전체 평균 페이스는 총 시간 ÷ 총 거리예요. 러닝별 중앙 페이스는
+            러닝별 페이스를 느린 순서대로 놓았을 때 가운데 값이에요.
+          </p>
+          <p className="fine">
+            삼성헬스 원본 합계:{" "}
             {num(raw.distanceM === null ? null : raw.distanceM / 1000, 2)}km ·{" "}
-            {duration(raw.durationMs)}. 가져온 {raw.count}회 중 거리 사용{" "}
-            {stats.distanceSessions}회, 시간 사용 {stats.durationSessions}회,
-            평균 페이스 사용 {stats.paceSessions}회. 짧거나 요약 확인이 필요한
-            값은 기본 집계에서 보류합니다. 관측 심박은 상세 {stats.hrSessions}회
-            · {num(stats.hrSec / 60, 1)}분의 시간가중 평균. 최대 심박 출처:{" "}
-            {stats.maxSource}.
+            {duration(raw.durationMs)}. 전체 {raw.count}회 중 거리 계산에{" "}
+            {stats.distanceSessions}회, 시간 계산에 {stats.durationSessions}회,
+            평균 페이스 계산에 {stats.paceSessions}회를 썼어요. 1분 미만이거나
+            시간·거리를 확인해야 하는 기록은 합계에서 뺐어요. 평균 심박은{" "}
+            {stats.hrSessions}회에서 측정된 {num(stats.hrSec / 60, 1)}분을
+            바탕으로 계산했어요.{" "}
+            {stats.maxHr === null
+              ? "최대 심박 측정값은 없어요."
+              : `최대 심박은 ${stats.maxSource}에서 가져왔어요.`}
           </p>
         </details>
       </section>
@@ -228,7 +236,7 @@ export function Dashboard({
             <span key={m.date}>
               {m.date.slice(0, 7)} ·{" "}
               {m.count ? `${m.days}일 / ${m.count}회` : "기록 없음"}
-              {m.partial ? " · 기록 기준 진행 중" : ""}
+              {m.partial ? " · 마지막 기록까지" : ""}
             </span>
           ))}
         </div>
@@ -242,11 +250,11 @@ export function Dashboard({
               <p className="subtle">
                 {num(s.distanceM === null ? null : s.distanceM / 1000, 2)}km ·{" "}
                 {duration(s.durationMs)}
-                {s.quality?.length ? " · 품질 안내 있음" : ""}
+                {s.quality?.length ? " · 확인할 내용 있음" : ""}
               </p>
             </div>
             <Button variant="ghost" onClick={() => onOpen(s.id)}>
-              자세히 →
+              기록 보기 →
             </Button>
           </div>
         ))}

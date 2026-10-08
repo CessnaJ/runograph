@@ -357,15 +357,15 @@ export function RunChart({
       </div>
       {(primary[0] > 0 || primary[1] < end) && (
         <p className="focus-note">
-          주 관측 구간 {elapsed(primary[0])}–{elapsed(primary[1])} · 전체 경과{" "}
-          {elapsed(end)} · 화면 밖 {outside}점
+          주요 측정 구간 {elapsed(primary[0])}–{elapsed(primary[1])} · 전체 시간{" "}
+          {elapsed(end)} · 화면 밖 측정값 {outside}개
         </p>
       )}
       {groups.length > 1 && (
         <label className="time-scope">
-          시간축 · 긴 공백으로 나뉜 관측
+          긴 공백이 있어요. 볼 구간을 골라주세요.
           <select
-            aria-label="시간축 관측 범위"
+            aria-label="그래프에 볼 구간"
             value={JSON.stringify(displayRange)}
             onChange={(e) => {
               const next = JSON.parse(e.target.value) as [number, number];
@@ -375,15 +375,15 @@ export function RunChart({
             }}
           >
             <option value={JSON.stringify([0, end])}>
-              전체 경과 · {elapsed(end)}
+              전체 시간 · {elapsed(end)}
             </option>
             {groups.map((g, i) => (
               <option
                 key={i}
                 value={JSON.stringify([g.from, Math.max(g.to, g.from + 1)])}
               >
-                관측 묶음 {i + 1} · {elapsed(g.from)}–{elapsed(g.to)} ·{" "}
-                {g.points}점
+                측정 구간 {i + 1} · {elapsed(g.from)}–{elapsed(g.to)} · 측정{" "}
+                {g.points}개
               </option>
             ))}
           </select>
@@ -394,7 +394,7 @@ export function RunChart({
           <div className="chart-label">
             {layout === "split"
               ? `${metricInfo[metrics[0]].label} · ${metricInfo[metrics[0]].unit}`
-              : "변화 시점 비교 · 독립 Y축"}
+              : "변화 시점 비교 · 독립 눈금"}
           </div>
           <div
             className={`plot ${layout === "combined" ? "plot-combined" : metrics[0] === "hr" ? "plot-heart" : "plot-pace"}`}
@@ -442,8 +442,8 @@ export function RunChart({
                 <button
                   key={p.index}
                   className="outside-point"
-                  title={`${elapsed(p.time)} · ${pace(p.pace)} /km · 표시 범위 밖`}
-                  aria-label={`${elapsed(p.time)} 페이스 바깥값 ${pace(p.pace)}`}
+                  title={`${elapsed(p.time)} · ${pace(p.pace)} /km · 축 범위 밖`}
+                  aria-label={`${elapsed(p.time)} 축 밖 페이스 ${pace(p.pace)}`}
                   style={{
                     left: `calc(44px + (100% - 60px) * ${(p.time - from) / (to - from || 1)})`,
                     top: p.pace! < domains.pace[0] ? 8 : undefined,
@@ -466,10 +466,10 @@ export function RunChart({
       <div className="readout" data-testid="readout">
         <div className="readout-time">
           {gapCursor !== null
-            ? `${elapsed(gapCursor)} · 관측 없음${pinned ? " · 고정" : ""}`
+            ? `${elapsed(gapCursor)} · 측정값 없음${pinned ? " · 고정" : ""}`
             : chosen
               ? `${elapsed(chosen.time)}${pinned ? " · 고정" : ""}`
-              : "시점을 선택하면 측정값이 표시됩니다"}
+              : "그래프를 눌러 측정값을 확인하세요"}
         </div>
         {(chosen || gapCursor !== null) && (
           <div className="readout-values">
@@ -490,7 +490,7 @@ export function RunChart({
         )}
         {chosen && (
           <small className="subtle">
-            {movement(chosen.speed)} · 원본 관측값
+            {movement(chosen.speed)} · 실제 측정값
           </small>
         )}
       </div>
@@ -500,14 +500,14 @@ export function RunChart({
           aria-pressed={cadence}
           onClick={() => setCadence(!cadence)}
         >
-          추가 지표 · 케이던스
+          {cadence ? "케이던스 접기" : "케이던스 보기"}
         </Button>
         <Button
           variant="ghost"
           aria-pressed={fullPace}
           onClick={() => setFullPace(!fullPace)}
         >
-          {fullPace ? "달리기 페이스 범위" : "전체 페이스 범위"}
+          {fullPace ? "달리기 페이스에 맞추기" : "모든 페이스 보기"}
         </Button>
         {hasHr && (
           <Button
@@ -515,15 +515,13 @@ export function RunChart({
             aria-pressed={trend}
             onClick={() => setTrend(!trend)}
           >
-            표시용 추세 {trend ? "켜짐" : "꺼짐"}
+            {trend ? "심박 흐름선 끄기" : "심박 흐름선 켜기"}
           </Button>
         )}
       </div>
       {outliers.length > 0 && (
         <details className="outlier-list">
-          <summary>
-            표시 범위 밖 페이스 {outliers.length}점 · 실제 값 확인
-          </summary>
+          <summary>축 범위 밖 페이스 {outliers.length}개 보기</summary>
           {outliers.map((p) => (
             <Button
               key={p.index}
@@ -542,9 +540,9 @@ export function RunChart({
       {layout === "combined" && (
         <>
           <label className="axis-select">
-            Y축 눈금{" "}
+            왼쪽 눈금{" "}
             <select
-              aria-label="Y축 눈금"
+              aria-label="왼쪽 눈금"
               value={displayMetrics.includes(axis) ? axis : displayMetrics[0]}
               onChange={(e) => setAxis(e.target.value as Metric)}
             >
@@ -567,7 +565,7 @@ export function RunChart({
             ))}
           </div>
           <p className="fine">
-            선의 교차나 높이는 같은 측정값을 뜻하지 않습니다.
+            각 선의 눈금이 달라요. 선의 높이보다 변화하는 시점을 비교해 주세요.
           </p>
         </>
       )}
@@ -594,14 +592,14 @@ export function RunChart({
               clear();
             }}
           >
-            주 관측 구간
+            주요 측정 구간
           </Button>
         )}
       </div>
       <label className="slider-label">
-        관측 시점 <span>{chosen ? elapsed(chosen.time) : "선택 전"}</span>
+        측정 시점 <span>{chosen ? elapsed(chosen.time) : "선택 전"}</span>
         <input
-          aria-label="관측 시점"
+          aria-label="측정 시점"
           type="range"
           min={nearest(points, from)}
           max={nearest(points, to)}
@@ -639,9 +637,9 @@ export function RunChart({
           </label>
           <div className="time-inputs">
             <label>
-              시작 초
+              시작 시간 (초)
               <input
-                aria-label="시작 초"
+                aria-label="시작 시간 (초)"
                 type="number"
                 min="0"
                 max={to - 1}
@@ -655,9 +653,9 @@ export function RunChart({
               />
             </label>
             <label>
-              끝 초
+              끝 시간 (초)
               <input
-                aria-label="끝 초"
+                aria-label="끝 시간 (초)"
                 type="number"
                 min={from + 1}
                 max={end}
@@ -677,25 +675,25 @@ export function RunChart({
         <span>
           {elapsed(from)}–{elapsed(to)}
         </span>
-        <span>원본 {stats.samples}표본</span>
+        <span>측정값 {stats.samples}개</span>
         <span>
-          심박 관측 {num(stats.hrSec / 60, 1)}분 · {num(stats.coverage * 100)}%
+          심박 측정 {num(stats.hrSec / 60, 1)}분 · {num(stats.coverage * 100)}%
         </span>
-        <span>동시 관측 {num(pairedSec / 60, 1)}분</span>
+        <span>심박·속도 함께 측정 {num(pairedSec / 60, 1)}분</span>
         <span>
           {stats.coverage >= 0.7
-            ? `관측 평균 심박 ${num(stats.meanHr)} bpm`
-            : "심박 관측 부족"}
+            ? `측정된 평균 심박 ${num(stats.meanHr)} bpm`
+            : "심박 측정 부족"}
         </span>
         <span>
           {stats.speedCoverage >= 0.7
-            ? `관측 평균 페이스 ${pace(stats.meanSpeed ? 1000 / stats.meanSpeed : null)} /km`
-            : "속도 관측 부족"}
+            ? `측정된 평균 페이스 ${pace(stats.meanSpeed ? 1000 / stats.meanSpeed : null)} /km`
+            : "속도 측정 부족"}
         </span>
         <span>
           {stats.cadenceCoverage >= 0.7
             ? `케이던스 ${num(stats.meanCadence)} 회/분`
-            : "케이던스 관측 부족"}
+            : "케이던스 측정 부족"}
         </span>
       </div>
       <section className="run-thirds">
@@ -716,12 +714,12 @@ export function RunChart({
               <b>
                 {s.hr.coverage >= 0.7
                   ? `${num(s.hr.mean)} bpm`
-                  : "심박 관측 부족"}
+                  : "심박 측정 부족"}
               </b>
               <span>
                 {s.speed.coverage >= 0.7
                   ? `${pace(s.speed.mean ? 1000 / s.speed.mean : null)} /km`
-                  : "속도 관측 부족"}
+                  : "속도 측정 부족"}
               </span>
               <small>
                 심박 {num(s.hr.sec / 60, 1)}분 · {num(s.hr.coverage * 100)}%
@@ -747,12 +745,14 @@ export function RunChart({
               />
             ))}
         </div>
-        <p className="fine">빈 구간: 공백·짧은 전환·미측정</p>
+        <p className="fine">
+          빈 곳은 측정이 없거나 움직임이 짧게 바뀐 구간이에요.
+        </p>
       </div>
       {gaps.length > 0 && (
         <details>
           <summary>
-            관측 공백 {gaps.length}곳 · 전체 경과 {elapsed(end)}
+            측정이 끊긴 곳 {gaps.length}개 · 전체 시간 {elapsed(end)}
           </summary>
           {gaps.map((g, i) => (
             <p className="fine" key={i}>
@@ -774,14 +774,14 @@ export function RunChart({
                   clear();
                 }}
               >
-                관측 묶음 {i + 1} · {elapsed(g.from)}–{elapsed(g.to)} ·{" "}
-                {g.points}점
+                측정 구간 {i + 1} · {elapsed(g.from)}–{elapsed(g.to)} · 측정{" "}
+                {g.points}개
               </Button>
             ))}
         </details>
       )}
       <section className="journal-section">
-        <h3>후반 유지력</h3>
+        <h3>전반과 후반의 심박·페이스</h3>
         {profile?.halves ? (
           <>
             <p>
@@ -801,37 +801,38 @@ export function RunChart({
               /km
             </p>
             <p className="fine">
-              {elapsed(profile.halves.from)}–{elapsed(profile.halves.to)} ·
-              전반/후반 관측 {num(profile.halves.first.sec / 60, 1)}/
-              {num(profile.halves.last.sec / 60, 1)}분 · 커버리지{" "}
+              {elapsed(profile.halves.from)}–{elapsed(profile.halves.to)} · 전반
+              / 후반 측정 {num(profile.halves.first.sec / 60, 1)}/
+              {num(profile.halves.last.sec / 60, 1)}분 · 측정된 비율{" "}
               {num(profile.halves.first.coverage * 100)}/
               {num(profile.halves.last.coverage * 100)}% ·{" "}
               {profile.halves.speedDifference > 0.05
-                ? "페이스도 달라진 전후반"
-                : "비슷한 평균속도의 전후반"}
+                ? "페이스 차이 5% 초과"
+                : "페이스 차이 5% 이내"}
             </p>
           </>
         ) : (
           <p className="empty-note">
-            각 절반 5분·동시 관측 70% 조건에 맞는 구간이 없습니다.
+            전후반을 비교할 측정값이 부족해요. 각 절반 5분 이상, 심박·속도 측정
+            비율 70% 이상이 필요해요.
           </p>
         )}
         {profile?.drift && (
           <details>
-            <summary>엄격한 드리프트 관측</summary>
+            <summary>비슷한 속도에서 심박 효율 변화 (드리프트)</summary>
             <p>
               {num(profile.drift.percent, 1)}% · {elapsed(profile.drift.from)}–
               {elapsed(profile.drift.to)}
             </p>
             <p className="fine">
-              연속 20분·관측 80%·절반 속도 차이 5% 이내 구간의 속도/심박 비율
-              변화입니다.
+              속도/심박 비율의 전후반 변화예요. 연속 20분·측정 비율 80% 이상,
+              전후반 속도 차이 5% 이내인 구간만 써요.
             </p>
           </details>
         )}
       </section>
       <section className="journal-section">
-        <h3>기록의 관찰</h3>
+        <h3>이 러닝에서 눈에 띄는 변화</h3>
         {profile?.observations.length ? (
           profile.observations.map((o, i) => (
             <button
@@ -840,7 +841,7 @@ export function RunChart({
               onClick={() => showObservation(o)}
             >
               <small>
-                {elapsed(o.from)}–{elapsed(o.to)} · 근거 구간 확대 →
+                {elapsed(o.from)}–{elapsed(o.to)} · 이 구간 보기 →
               </small>
               <h3>{o.title}</h3>
               <p>{o.evidence}</p>
@@ -849,13 +850,16 @@ export function RunChart({
           ))
         ) : (
           <p className="fine">
-            분석 가능한 관측에서 조건에 맞는 특이 구간이 없습니다. 결측 구간은
-            판단하지 않습니다.
+            {!profile
+              ? "이 기록의 변화 분석은 아직 완료하지 못했어요."
+              : profile.hrSec === 0
+                ? "심박 측정값이 없어 변화를 확인할 수 없어요."
+                : "측정된 구간에서 계산 기준에 맞는 변화는 찾지 못했어요."}
           </p>
         )}
       </section>
       <details className="threshold">
-        <summary>내 기준 심박 이상 구간 확인</summary>
+        <summary>내가 정한 심박 이상으로 달린 구간</summary>
         <label>
           심박 기준 (bpm)
           <input
@@ -869,7 +873,7 @@ export function RunChart({
           />
         </label>
         <p className="fine">
-          직접 정한 값 이상으로 60초 이상 이어진 실제 관측입니다.
+          입력한 심박 이상으로 1분 이상 측정된 구간을 찾아요.
         </p>
         {extra.map((o, i) => (
           <button
@@ -881,28 +885,31 @@ export function RunChart({
           </button>
         ))}
         {threshold && !extra.length && (
-          <p className="subtle">연속 관측 조건에 맞는 구간이 없습니다.</p>
+          <p className="subtle">
+            입력한 심박 이상으로 1분 이상 측정된 구간이 없어요.
+          </p>
         )}
       </details>
       <details className="journal-details">
-        <summary>그래프와 계산 기준</summary>
+        <summary>그래프 읽는 법·계산 기준</summary>
         <p className="fine">
-          얇은 선은 원본, 진한 심박 선은 60초 표시용 중앙값입니다. 계산은 원본
-          관측 구간을 시간으로 가중합니다. {detail.gapSec}초 초과 공백과 결측은
-          연결하지 않고 마지막 점을 연장하지 않습니다. 확대해도 축과 측정
-          해상도는 유지됩니다. 이동 상태는 속도 기준 추정이며 원본 일시정지 버튼
-          기록이 아닙니다.
+          얇은 심박 선은 실제 측정값, 진한 선은 1분간 측정값의 중앙값으로 그린
+          흐름선이에요. 평균은 실제 측정된 시간을 반영해 계산해요.
+          {detail.gapSec}초 넘게 측정이 끊긴 곳은 선을 잇지 않아요. 마지막
+          측정값 이후도 늘려 그리지 않아요. 구간을 확대해도 축의 범위는
+          유지해요.
         </p>
         <p className="fine">
-          심박 축 {num(domains.hr[0])}–{num(domains.hr[1])} bpm · 페이스 축{" "}
-          {pace(domains.pace[0])}–{pace(domains.pace[1])} /km. 구간거리 방향이
-          확인되지 않아 거리 분할·회복심박 추정은 제공하지 않습니다.
+          심박 눈금 {num(domains.hr[0])}–{num(domains.hr[1])} bpm · 페이스 눈금{" "}
+          {pace(domains.pace[0])}–{pace(domains.pace[1])} /km.
+          달리기·걷기·멈춤은 속도로 추정한 상태예요. 앱의 일시정지 버튼 기록과는
+          다를 수 있어요. 구간별 거리와 운동 후 회복심박은 계산하지 않아요.
         </p>
       </details>
       <div className="sr-only" aria-live="polite">
         {pinned
           ? gapCursor !== null
-            ? `${elapsed(gapCursor)}, 관측 없음`
+            ? `${elapsed(gapCursor)}, 측정값 없음`
             : chosen
               ? `${elapsed(chosen.time)}, 심박 ${num(chosen.hr)}, 페이스 ${pace(chosen.pace)}, 케이던스 ${num(chosen.cadence)}`
               : ""

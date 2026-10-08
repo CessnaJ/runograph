@@ -91,7 +91,9 @@ export function parseExerciseCsv(text: string): {
     skipEmptyLines: "greedy",
   });
   if (parsed.errors.length)
-    throw new Error("운동 CSV의 따옴표 또는 행 형식이 올바르지 않습니다.");
+    throw new Error(
+      "운동 기록 파일의 형식이 맞지 않아요. 삼성헬스에서 다시 다운로드한 ZIP을 선택해 주세요.",
+    );
   const rows = parsed.data;
   if (
     rows[0]?.[0]?.trim() === "com.samsung.shealth.exercise" ||
@@ -99,9 +101,14 @@ export function parseExerciseCsv(text: string): {
   )
     rows.shift();
   const header = rows.shift()?.map((x) => x.trim());
-  if (!header) throw new Error("운동 CSV가 비어 있습니다.");
+  if (!header)
+    throw new Error(
+      "운동 기록 파일이 비어 있어요. 삼성헬스에서 다시 다운로드한 ZIP을 선택해 주세요.",
+    );
   if (new Set(header).size !== header.length)
-    throw new Error("운동 CSV에 중복 헤더가 있습니다.");
+    throw new Error(
+      "운동 기록 파일에 같은 항목이 중복돼 있어요. 삼성헬스에서 다시 다운로드한 ZIP을 선택해 주세요.",
+    );
   const indices = new Map(
     keys.map((key) => [
       key,
@@ -112,9 +119,13 @@ export function parseExerciseCsv(text: string): {
     !indices.get("exercise_type")?.length ||
     !indices.get("start_time")?.length
   )
-    throw new Error("지원하는 운동 CSV 헤더를 찾지 못했습니다.");
+    throw new Error(
+      "이 운동 기록 파일의 형식은 아직 읽을 수 없어요. 삼성헬스에서 다운로드한 원본 ZIP인지 확인해 주세요.",
+    );
   if (rows.length > 50000)
-    throw new Error("운동 CSV의 행 수가 50,000개 제한을 넘습니다.");
+    throw new Error(
+      "운동 기록이 5만 줄 제한을 넘었어요. 더 작은 내보내기 파일을 선택해 주세요.",
+    );
   const sessions: InternalSummary[] = [];
   const uuidIndex = new Map<string, number>();
   const deviceGroups = new Map<string, string>();
@@ -203,9 +214,11 @@ export function parseExerciseCsv(text: string): {
     sessions,
     warnings: [
       ...(skipped
-        ? [`${skipped}개 CSV 행은 형식 또는 시작 시각 오류로 제외했습니다.`]
+        ? [`${skipped}개 기록은 형식이나 시작 시간이 맞지 않아 읽지 못했어요.`]
         : []),
-      ...(conflicts ? [`${conflicts}개 중복 기록에 값 차이가 있습니다.`] : []),
+      ...(conflicts
+        ? [`${conflicts}개 중복 기록에 서로 다른 값이 있어요.`]
+        : []),
     ],
   };
 }
@@ -251,17 +264,19 @@ export function parseDetail(
     else if (char === "{" || char === "[") {
       depth++;
       if (depth > 16)
-        throw new Error("상세 JSON의 중첩 깊이가 제한을 넘습니다.");
+        throw new Error("측정 파일의 구조가 복잡해 읽기 제한을 넘었어요.");
     } else if (char === "}" || char === "]") depth--;
   }
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error("상세 JSON을 읽을 수 없습니다.");
+    throw new Error("시간별 측정 파일을 읽지 못했어요.");
   }
   if (!Array.isArray(raw) || raw.length > 100000)
-    throw new Error("지원하지 않는 상세 JSON 구조 또는 표본 수 제한입니다.");
+    throw new Error(
+      "시간별 측정 파일의 형식이 맞지 않거나 측정값 개수 제한을 넘었어요.",
+    );
   const issues: string[] = [];
   const byTime = new Map<number, Point>();
   const conflicts = new Map<number, Set<keyof Point>>();
@@ -313,7 +328,7 @@ export function parseDetail(
   }
   const points = [...byTime.values()].sort((a, b) => a.epochMs - b.epochMs);
   if (!points.length)
-    throw new Error("운동 시각에 일치하는 유효 상세 표본이 없습니다.");
+    throw new Error("이 러닝 시간에 해당하는 측정값을 찾지 못했어요.");
   const intervals = points
     .slice(1)
     .map((p, i) => p.time - points[i].time)

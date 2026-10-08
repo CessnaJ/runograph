@@ -179,7 +179,7 @@ it("rejects deeply nested JSON before parsing unneeded structures", async () => 
       endMs: null,
       distanceM: null,
     }),
-  ).toThrow(/중첩/);
+  ).toThrow(/구조.*제한/);
 });
 it("splits drift intervals exactly at the half-time boundary", () => {
   const detail = d(

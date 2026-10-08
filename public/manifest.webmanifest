@@ -2,7 +2,7 @@
   "id": "/",
   "name": "runograph · 러닝 기록장",
   "short_name": "runograph",
-  "description": "삼성헬스 러닝 ZIP을 서버 전송 없이 기기 안에서 읽는 미니멀 러닝 기록장",
+  "description": "삼성헬스 기록으로 심박과 페이스의 변화를 살펴보는 러닝 기록장. 파일은 기기 안에서만 읽어요.",
   "lang": "ko-KR",
   "dir": "ltr",
   "start_url": "/#summary",

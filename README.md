@@ -70,6 +70,7 @@ GitHub와 연결한 프로젝트는 푸시 후 Vercel의 배포 상태를 확인
 
 - [개편 확정 스펙 v0.2 — A–C 구현](docs/REVISION_SPEC.md)
 - [현재 구현과 검증 범위](docs/IMPLEMENTATION.md)
+- [문구 원칙과 화면별 검토](docs/COPY_GUIDE.md)
 - [PWA 아이콘·시작 화면·설치 범위](docs/PWA.md)
 - [제품 기획 및 분석 기준](docs/PRODUCT.md)
 - [디자인](docs/DESIGN.md)

@@ -12,10 +12,10 @@ export class ErrorBoundary extends Component<
     if (this.state.failed)
       return (
         <main className="app-shell import-page">
-          <h1>화면을 다시 준비할게요.</h1>
+          <h1>화면을 불러오지 못했어요</h1>
           <p className="subtle">
-            앱 파일을 읽지 못했거나 화면 처리 중 오류가 생겼습니다. 새로고침 후
-            ZIP을 다시 선택해 주세요.
+            새로고침한 뒤 ZIP 파일을 다시 선택해 주세요. 불러온 기록은
+            새로고침하면 사라져요.
           </p>
           <Button onClick={() => location.reload()}>새로고침</Button>
         </main>

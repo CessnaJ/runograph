@@ -12,14 +12,14 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
   if (s.durationMs !== null && s.durationMs < 60000)
     review(
       "short-record",
-      "운동시간이 60초 미만입니다. 분할 운동이면 직접 포함할 수 있습니다.",
+      "1분 미만 기록은 기본 합계에서 제외해요. 분할 기록이면 직접 포함할 수 있어요.",
     );
   if (s.durationMs !== null && s.endMs !== null) {
     const wall = s.endMs - s.startMs;
     if (wall < 0 || s.durationMs - wall > Math.max(60000, wall * 0.05))
       review(
         "duration-conflict",
-        "운동시간이 시작·종료 시각의 범위와 맞지 않습니다.",
+        "저장된 운동시간이 시작·종료 시각과 맞지 않아 시간·거리 합계에서 뺐어요.",
       );
   }
   if (
@@ -30,13 +30,14 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
   )
     review(
       "summary-pace-review",
-      "요약 시간·거리로 계산한 페이스가 2:00/km보다 빠릅니다. 원본 확인이 필요합니다.",
+      "요약 페이스가 2:00/km보다 빨라 시간·거리 합계에서 제외해요. 원본을 확인해 주세요.",
     );
   if (s.offsetMs === null)
     out.push({
       code: "offset-unknown",
       metrics: ["date"],
-      evidence: "현지 시간대가 없어 UTC 날짜를 표시합니다.",
+      evidence:
+        "시간대 정보가 없어 UTC 날짜로 보여드려요. 날짜별 비교에서는 제외해요.",
       action: "unavailable",
     });
   if (d) {
@@ -51,7 +52,7 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
     )
       review(
         "summary-detail-speed",
-        "요약 평균속도가 상세 최고속도의 1.5배를 넘습니다. 상세 관측이 전체 운동을 대표하지 않을 수 있습니다.",
+        "요약 평균속도가 상세 최고속도의 1.5배를 넘어 합계에서 제외해요. 상세 측정이 운동 일부에만 있을 수도 있어요.",
       );
     for (let i = 1; i < d.points.length; i++)
       if (d.points[i].time - d.points[i - 1].time > d.gapSec) {
@@ -59,7 +60,8 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
           code: "observation-gap",
           metrics: ["detail"],
           action: "unavailable",
-          evidence: "관측 공백을 연결하거나 운동시간으로 보정하지 않습니다.",
+          evidence:
+            "측정이 끊긴 구간이에요. 그래프를 잇거나 계산할 값으로 채우지 않아요.",
           from: d.points[i - 1].time,
           to: d.points[i].time,
         });

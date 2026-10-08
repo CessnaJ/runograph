@@ -67,10 +67,10 @@ export function aggregate(
     hrSessions: ps.filter((p) => p.hrSec > 0).length,
     paceSessions: paired.length,
     maxSource: max.length
-      ? "CSV 요약"
+      ? "삼성헬스 요약"
       : fallback.length
-        ? "상세 관측"
-        : "관측 없음",
+        ? "시간별 측정값"
+        : "측정값 없음",
     durationSessions: sessions.filter(
       (s) => s.durationMs !== null && usesSummary(s, "duration", raw),
     ).length,
@@ -252,7 +252,7 @@ export function observations(
   const out: Observation[] = [];
   const points = detail.points;
   const limit =
-    "센서·측정 간격·운동 조건의 영향을 받습니다. 질환이나 위험을 판정하는 결과가 아닙니다.";
+    "센서나 측정 간격, 운동 환경에 따라 달라질 수 있어요. 이 변화만으로 건강 상태를 판단할 수는 없어요.";
   let highFrom: number | null = null;
   for (let i = 0; i < points.length; i++) {
     const p = points[i],
@@ -269,7 +269,7 @@ export function observations(
     )
       out.push({
         kind: "change",
-        title: "짧은 시간의 심박 변화",
+        title: "짧은 시간에 심박이 달라졌어요",
         from: prev.time,
         to: p.time,
         evidence: `${Math.round(p.time - prev.time)}초 동안 ${Math.round(p.hr - prev.hr) > 0 ? "+" : ""}${Math.round(p.hr - prev.hr)} bpm (${Math.round(prev.hr)} → ${Math.round(p.hr)})`,
@@ -286,10 +286,10 @@ export function observations(
         if (end - highFrom >= 60)
           out.push({
             kind: "threshold",
-            title: "설정한 심박 이상 구간",
+            title: "정한 심박 이상으로 이어졌어요",
             from: highFrom,
             to: end,
-            evidence: `${threshold} bpm 이상 · ${Math.round(end - highFrom)}초 관측`,
+            evidence: `${threshold} bpm 이상 · ${Math.round(end - highFrom)}초 측정`,
             limit,
           });
         highFrom = high ? p.time : null;
@@ -325,12 +325,12 @@ export function observations(
     if (r >= 0.8 && diff <= 10) {
       out.push({
         kind: "similarity",
-        title: "심박과 케이던스의 유사한 변화",
+        title: "심박과 케이던스가 비슷하게 움직였어요",
         from: window[0].time,
         to: window.at(-1)!.time,
-        evidence: `동시 표본 30개 · 상관 ${r.toFixed(2)} · 차이 중앙값 ${diff.toFixed(1)}`,
+        evidence: `함께 측정된 값 30개 · 상관계수 ${r.toFixed(2)} · 차이 중앙값 ${diff.toFixed(1)}`,
         limit:
-          "두 원본 수치의 유사성입니다. 센서 간섭이나 cadence lock을 확정하지 않습니다.",
+          "두 측정값이 비슷하게 움직였다는 뜻이에요. 센서가 걸음 수를 심박으로 읽은 오류인지는 이 결과로 알 수 없어요.",
       });
       break;
     }
@@ -380,12 +380,12 @@ export function observations(
     if (speeds[0] > 1.8 && speeds[1] <= speeds[0] * 0.8) {
       out.push({
         kind: "slowing",
-        title: "감속 뒤 관측한 심박 변화",
+        title: "속도를 줄인 뒤 심박이 달라졌어요",
         from: t - 60,
         to: t + 120,
         evidence: `속도 중앙값 ${speeds[0].toFixed(1)} → ${speeds[1].toFixed(1)} m/s · 이후 심박 ${Math.round(hrs[1])} → ${Math.round(hrs[2])} bpm`,
         limit:
-          "러닝 중 60초 창의 관측값 비교입니다. 운동 종료 후 회복심박(HRR)이 아닙니다.",
+          "달리는 중 속도를 줄인 뒤의 1분 구간을 비교했어요. 운동을 마친 뒤 얼마나 빨리 심박이 낮아지는지를 계산한 값은 아니에요.",
       });
       break;
     }

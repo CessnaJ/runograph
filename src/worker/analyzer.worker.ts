@@ -28,7 +28,7 @@ async function handle(msg: WorkerRequest) {
       const warnings = [...result.warnings];
       if (msg.file.size > 256 * 1024 ** 2)
         warnings.push(
-          "큰 파일입니다. 휴대폰 메모리가 부족하면 탭이 종료될 수 있습니다.",
+          "큰 파일이라 기기 메모리를 많이 써요. 분석이 멈추면 다른 탭을 닫고 다시 시도해 주세요.",
         );
       for (let i = 0; i < summaries.length; i++) {
         const summary = summaries[i];
@@ -64,13 +64,13 @@ async function handle(msg: WorkerRequest) {
         send({
           type: "PROGRESS",
           requestId: msg.requestId,
-          phase: `러닝 분석 · ${i + 1} / ${summaries.length}`,
+          phase: `러닝 분석 중 · ${i + 1} / ${summaries.length}`,
           percent: 15 + Math.round(((i + 1) / summaries.length) * 85),
         });
       }
       if (summaries.some((s) => s.status === "limited"))
         warnings.push(
-          "메모리 보호를 위해 성장 분석의 표본 수를 제한했습니다. 개별 기록은 다시 읽을 수 있습니다.",
+          "파일이 커서 일부 기록만 비교 분석했어요. 아직 분석하지 않은 러닝도 개별 기록을 열면 볼 수 있어요.",
         );
       const sessions: Summary[] = summaries.map(
         ({ reference, uuid, updatedMs, ...s }) => {
@@ -102,7 +102,7 @@ async function handle(msg: WorkerRequest) {
       message:
         error instanceof Error
           ? error.message
-          : "분석을 완료하지 못했습니다. 파일을 다시 선택해 주세요.",
+          : "분석을 마치지 못했어요. ZIP 파일을 다시 선택해 주세요.",
     });
   }
 }

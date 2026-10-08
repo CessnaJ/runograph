@@ -372,30 +372,30 @@ function candidates(
     );
     const detailReason =
       s.status === "limited"
-        ? "메모리 보호로 상세 분석 제한"
+        ? "파일이 커서 일부 기록만 분석했어요"
         : s.status === "missing"
-          ? "연결된 상세 없음"
+          ? "시간별 측정 파일 없음"
           : s.status === "invalid"
-            ? "상세 읽기 실패"
+            ? "측정 파일을 읽지 못함"
             : byId.get(s.id)?.hrSec === 0
-              ? "심박 관측 없음"
+              ? "심박 측정값 없음"
               : "";
     const reason =
       s.offsetMs === null
-        ? "시간대 미확인"
+        ? "시간대 정보 없음"
         : s.growthExcluded
-          ? "사용자가 성장 비교에서 제외"
+          ? "직접 비교에서 뺀 기록"
           : cfg.device !== "all" && s.deviceGroup !== cfg.device
-            ? "다른 기기"
+            ? "선택한 기기와 다름"
             : s.durationMs !== null &&
                 s.durationMs < 60000 &&
                 s.inclusion !== "include"
-              ? "짧은 기록"
+              ? "1분 미만인 기록"
               : detailReason
                 ? detailReason
                 : windows.length < 3 ||
                     windows.reduce((n, w) => n + w.sec, 0) < 180
-                  ? "안정 관측 3창·3분 부족"
+                  ? "속도가 안정적인 측정 구간이 3개·3분보다 적어요"
                   : "";
     if (reason) {
       excluded.push({ id: s.id, date: s.date, reason });
@@ -599,11 +599,13 @@ export function compare(
         ? "reference"
         : "insufficient";
   if (!inRange)
-    reason.push("공통 관측 범위가 겹치지 않거나 목표가 범위 밖입니다.");
+    reason.push("선택한 페이스·심박이 두 기간의 공통 측정 범위 밖이에요.");
   if (cfg.phases.length < 2)
-    reason.push("양쪽에 지원되는 운동 구간이 2개 미만입니다.");
+    reason.push("두 기간 모두 측정값이 충분한 운동 구간이 2개보다 적어요.");
   if (!supported(previous, false) || !supported(recent, false))
-    reason.push("각 기간 3회·2일·유효 3회·가중 5분 이상의 관측이 필요합니다.");
+    reason.push(
+      "각 기간 3회·2일·유효 3회·가중 5분, 구간별 유효 2회 이상이 필요해요.",
+    );
   if (state !== "insufficient") {
     const mismatch = previous.phases.some((p, i) => {
       const n = recent.phases[i];
@@ -625,8 +627,8 @@ export function compare(
       state = "conditions";
       reason.push(
         cfg.device === "all" || cfg.device === "출처 미상"
-          ? "기기가 혼합되었거나 출처가 미확인입니다."
-          : "실제 속도/심박 또는 운동 시점이 충분히 맞지 않습니다.",
+          ? "기기가 다르거나 기기 정보가 없어 참고로만 봐주세요."
+          : "실제 페이스·심박이나 운동 시점이 달랐어요. 비교 구간을 확인해 주세요.",
       );
     }
   }
@@ -668,7 +670,7 @@ export function compare(
       ) {
         state = "sensitive";
         reason.push(
-          "폭 또는 러닝 한 회 제외 시 결과 방향/비교 상태가 달라집니다.",
+          "비교 범위를 바꾸거나 러닝 하나를 빼면 차이의 방향이나 비교 가능 여부가 달라져요.",
         );
       }
     }
@@ -838,10 +840,10 @@ export function evidence(row: CompareRow): EvidenceRef[] {
 }
 export const STATE_LABEL: Record<CompareState, string> = {
   ready: "비교 가능",
-  reference: "참고 관측",
-  conditions: "비교 조건 차이",
-  insufficient: "데이터 부족",
-  sensitive: "설정에 민감",
+  reference: "참고용",
+  conditions: "조건 다름",
+  insufficient: "기록 부족",
+  sensitive: "설정 영향 있음",
 };
 export function trainingRows(
   sessions: Summary[],
