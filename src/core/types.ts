@@ -11,6 +11,32 @@ export interface Summary {
   meanCadence: number | null;
   status: "pending" | "ready" | "missing" | "invalid" | "limited";
   issues: string[];
+  deviceGroup?: string;
+  quality?: QualityIssue[];
+  inclusion?: "default" | "include" | "exclude";
+  growthExcluded?: boolean;
+}
+export interface QualityIssue {
+  code: string;
+  metrics: ("duration" | "distance" | "pace" | "date" | "detail")[];
+  evidence: string;
+  action: "review" | "unavailable";
+  from?: number;
+  to?: number;
+}
+export interface StableWindow {
+  from: number;
+  to: number;
+  hr: number;
+  speed: number;
+  sec: number;
+  samples: number;
+  cv: number;
+}
+export interface EvidenceRef {
+  id: string;
+  from: number;
+  to: number;
 }
 export interface InternalSummary extends Summary {
   reference: string | null;
@@ -73,11 +99,22 @@ export interface Profile extends Weighted {
   pairCount: number;
   observations: Observation[];
   drift: Drift | null;
+  windows?: StableWindow[];
+  windowDiagnostics?: Record<string, number>;
+  longestRunSec?: number;
+  halves?: {
+    from: number;
+    to: number;
+    first: { hr: number; speed: number; sec: number; coverage: number };
+    last: { hr: number; speed: number; sec: number; coverage: number };
+    speedDifference: number;
+  } | null;
 }
 export interface Dataset {
   sessions: Summary[];
   profiles: Profile[];
   warnings: string[];
+  revision?: number;
 }
 export type WorkerRequest =
   | { type: "IMPORT"; requestId: number; file: File }

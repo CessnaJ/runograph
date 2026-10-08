@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import type { Detail, InternalSummary, Point } from "./types";
+import { qualityIssues } from "./quality";
 const prefix = "com.samsung.health.exercise.";
 const keys = [
   "start_time",
@@ -14,6 +15,7 @@ const keys = [
   "live_data",
   "datauuid",
   "update_time",
+  "deviceuuid",
 ] as const;
 export function numeric(value: unknown, zero = true): number | null {
   if (typeof value !== "number" && typeof value !== "string") return null;
@@ -115,6 +117,7 @@ export function parseExerciseCsv(text: string): {
     throw new Error("운동 CSV의 행 수가 50,000개 제한을 넘습니다.");
   const sessions: InternalSummary[] = [];
   const uuidIndex = new Map<string, number>();
+  const deviceGroups = new Map<string, string>();
   let skipped = 0;
   let conflicts = 0;
   for (const row of rows) {
@@ -145,6 +148,12 @@ export function parseExerciseCsv(text: string): {
     const offsetMs = parseOffset(field("time_offset"));
     if (offsetMs === null) issues.push("offset-unknown");
     const reference = field("live_data") || null;
+    const device = field("deviceuuid");
+    if (device && !deviceGroups.has(device))
+      deviceGroups.set(
+        device,
+        `기기 ${String.fromCharCode(65 + deviceGroups.size)}`,
+      );
     const item: InternalSummary = {
       id: "",
       startMs,
@@ -161,7 +170,14 @@ export function parseExerciseCsv(text: string): {
       updatedMs: parseUtc(field("update_time")),
       status: reference ? "pending" : "missing",
       issues,
+      deviceGroup: deviceGroups.get(device) ?? "출처 미상",
     };
+    item.quality = qualityIssues(item);
+    item.issues.push(
+      ...item.quality
+        .map((q) => q.code)
+        .filter((c) => !item.issues.includes(c)),
+    );
     const previous = item.uuid ? (uuidIndex.get(item.uuid) ?? -1) : -1;
     if (previous < 0) {
       if (item.uuid) uuidIndex.set(item.uuid, sessions.length);

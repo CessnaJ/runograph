@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { Archive, LIMITS } from "../core/archive";
 import { profile } from "../core/metrics";
+import { qualityIssues } from "../core/quality";
 import type {
   InternalSummary,
   Profile,
@@ -38,8 +39,16 @@ async function handle(msg: WorkerRequest) {
           }
           try {
             const detail = await archive.detail(summary);
+            summary.quality = qualityIssues(summary, detail);
+            summary.issues.push(
+              ...summary.quality
+                .map((q) => q.code)
+                .filter((c) => !summary.issues.includes(c)),
+            );
             samples += detail.points.length;
             const p = profile(detail);
+            // v0.2 sends compact timed windows; legacy bins stay out of React state.
+            p.bins = [];
             profiles.push(p);
             summary.status = "ready";
             summary.issues.push(...detail.issues);
@@ -74,7 +83,7 @@ async function handle(msg: WorkerRequest) {
       send({
         type: "DATA",
         requestId: msg.requestId,
-        data: { sessions, profiles, warnings },
+        data: { sessions, profiles, warnings, revision: msg.requestId },
       });
     } else {
       const summary = summaries.find((s) => s.id === msg.id);

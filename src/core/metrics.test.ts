@@ -211,5 +211,6 @@ it("never turns entirely missing totals into zero observations", () => {
   expect(result.durationMs).toBeNull();
   expect(result.maxHr).toBeNull();
   expect(result.distanceMissing).toBe(1);
-  expect(aggregate([s("zero", 0, 0)], []).distanceM).toBe(0);
+  expect(aggregate([s("zero", 0, 0)], []).distanceM).toBeNull();
+  expect(aggregate([s("zero", 0, 0)], [], true).distanceM).toBe(0);
 });

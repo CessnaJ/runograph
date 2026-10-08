@@ -12,8 +12,22 @@ import {
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { aggregate } from "./core/metrics";
-import { duration, elapsed, issueLabel, num, pace } from "./core/format";
-import type { Dataset, Detail, Summary, WorkerResponse } from "./core/types";
+import { duration, issueLabel, num, pace } from "./core/format";
+import {
+  ANALYSIS_VERSION,
+  compare,
+  suggestComparison,
+  type CompareConfig,
+} from "./core/analysis";
+import { summaryPace, usesSummary } from "./core/quality";
+import type { GrowthView } from "./components/Growth";
+import type {
+  Dataset,
+  Detail,
+  EvidenceRef,
+  Summary,
+  WorkerResponse,
+} from "./core/types";
 const Dashboard = lazy(() =>
   import("./components/Dashboard").then((m) => ({ default: m.Dashboard })),
 );
@@ -31,12 +45,18 @@ function initialTab(): Tab {
       ? "growth"
       : "summary";
 }
-function downloadReport(data: Dataset, sessions: Summary[], urls: Set<string>) {
+function downloadReport(
+  data: Dataset,
+  sessions: Summary[],
+  urls: Set<string>,
+  activeConfig: CompareConfig | null,
+) {
   const ids = new Set(sessions.map((s) => s.id));
   const profiles = data.profiles.filter((p) => ids.has(p.id));
   const report = {
     app: "runograph",
-    calculationVersion: "0.1.0",
+    calculationVersion: ANALYSIS_VERSION,
+    inputRevision: data.revision ?? 0,
     generatedAt: new Date().toISOString(),
     scope: "선택한 기간",
     basis: {
@@ -46,6 +66,48 @@ function downloadReport(data: Dataset, sessions: Summary[], urls: Set<string>) {
       pace: "유효 운동시간 / 동일 기록의 거리",
     },
     aggregate: aggregate(sessions, profiles),
+    rawAggregate: aggregate(sessions, profiles, true),
+    comparisons: (["heart", "pace"] as const).map((question) => {
+      const c = compare(
+        sessions,
+        profiles,
+        activeConfig?.question === question
+          ? activeConfig
+          : suggestComparison(sessions, profiles, question),
+        true,
+        data.revision ?? 0,
+      );
+      return {
+        question,
+        target: c.config.target,
+        width: c.config.width,
+        elapsedRangeSec: [c.config.elapsedFrom, c.config.elapsedTo],
+        matchedPhaseStartsSec: c.config.phases.map((p) => p * 300),
+        deviceFilter:
+          c.config.device === "all"
+            ? "mixed"
+            : c.config.device === "출처 미상"
+              ? "unknown"
+              : "single-local-group",
+        periods: c.periods,
+        status: c.state,
+        difference: c.state === "insufficient" ? null : c.difference,
+        previous: {
+          value: c.previous.value,
+          runs: c.previous.count,
+          effectiveRuns: c.previous.effective,
+          weightedSeconds: c.previous.sec,
+        },
+        recent: {
+          value: c.recent.value,
+          runs: c.recent.count,
+          effectiveRuns: c.recent.effective,
+          weightedSeconds: c.recent.sec,
+        },
+        reasons: c.reason,
+        sensitivity: c.sensitivity,
+      };
+    }),
     sessions: sessions.map((s) => ({
       date: s.date,
       durationMs: s.durationMs,
@@ -54,6 +116,8 @@ function downloadReport(data: Dataset, sessions: Summary[], urls: Set<string>) {
       maxHeartRateBpm: s.maxHr,
       detailStatus: s.status,
       quality: s.issues.map(issueLabel),
+      summaryInclusion: s.inclusion ?? "default",
+      growthExcluded: s.growthExcluded ?? false,
     })),
     limitations: [
       "결측과 긴 공백은 보간하지 않음",
@@ -89,12 +153,21 @@ export default function App() {
     [from, setFrom] = useState(""),
     [to, setTo] = useState(""),
     [reportOpen, setReportOpen] = useState(false),
+    [growthConfig, setGrowthConfig] = useState<CompareConfig | null>(null),
+    [growthView, setGrowthView] = useState<GrowthView>("heart"),
+    [focus, setFocus] = useState<EvidenceRef | undefined>(),
+    [qualityFilter, setQualityFilter] = useState("all"),
+    [order, setOrder] = useState("latest"),
     [theme, setTheme] = useState(
       () =>
         localStorage.getItem("runograph-theme") ??
         (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
     );
   const reportUrls = useRef(new Set<string>());
+  const returnTo = useRef<{ tab: Tab; scroll: number }>({
+    tab: "runs",
+    scroll: 0,
+  });
   const worker = useRef<Worker | null>(null),
     sequence = useRef(0),
     input = useRef<HTMLInputElement>(null),
@@ -133,6 +206,25 @@ export default function App() {
   );
   const selected = data?.sessions.find((s) => s.id === selectedId),
     profile = data?.profiles.find((p) => p.id === selectedId);
+  const listedSessions = useMemo(
+    () =>
+      sessions
+        .filter(
+          (s) =>
+            qualityFilter === "all" ||
+            (qualityFilter === "review"
+              ? (s.quality ?? []).some((q) => q.action === "review")
+              : s.offsetMs !== null &&
+                !s.growthExcluded &&
+                (data?.profiles
+                  .find((p) => p.id === s.id)
+                  ?.windows?.reduce((n, w) => n + w.sec, 0) ?? 0) >= 180),
+        )
+        .sort((a, b) =>
+          order === "latest" ? b.startMs - a.startMs : a.startMs - b.startMs,
+        ),
+    [sessions, data, qualityFilter, order],
+  );
   function reset() {
     for (const url of reportUrls.current) URL.revokeObjectURL(url);
     reportUrls.current.clear();
@@ -151,6 +243,11 @@ export default function App() {
     setFrom("");
     setTo("");
     setReportOpen(false);
+    setGrowthConfig(null);
+    setGrowthView("heart");
+    setFocus(undefined);
+    setQualityFilter("all");
+    setOrder("latest");
     if (input.current) input.current.value = "";
   }
   function importFile(file: File) {
@@ -205,7 +302,10 @@ export default function App() {
     };
     next.postMessage({ type: "IMPORT", requestId, file });
   }
-  function openRun(id: string) {
+  function openRun(id: string, evidence?: EvidenceRef) {
+    if (tab !== "runs" || selectedId === null)
+      returnTo.current = { tab, scroll: window.scrollY };
+    setFocus(evidence);
     setSelectedId(id);
     setDetail(null);
     setDetailError("");
@@ -217,14 +317,44 @@ export default function App() {
     worker.current?.postMessage({ type: "DETAIL", requestId, id });
     window.scrollTo({ top: 0, behavior: "instant" });
   }
+  function backFromRun() {
+    const back = returnTo.current;
+    setSelectedId(null);
+    setDetail(null);
+    setFocus(undefined);
+    current.current.detail = 0;
+    setTab(back.tab);
+    location.hash = back.tab;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        window.scrollTo({ top: back.scroll, behavior: "instant" }),
+      ),
+    );
+  }
+  function updateSession(id: string, updates: Partial<Summary>) {
+    setData((old) =>
+      old
+        ? {
+            ...old,
+            revision: (old.revision ?? 0) + 1,
+            sessions: old.sessions.map((s) =>
+              s.id === id ? { ...s, ...updates } : s,
+            ),
+          }
+        : old,
+    );
+  }
   function changeTab(value: Tab) {
     setTab(value);
     location.hash = value;
     setReportOpen(false);
     if (value === "runs" && selectedId === null) setDetail(null);
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${tab === "runs" && selected ? "is-detail" : ""}`}
+    >
       <header className="app-header">
         <button
           className="wordmark"
@@ -402,51 +532,53 @@ export default function App() {
                 {error}
               </p>
             )}
-            <details className="global-filters">
-              <summary>
-                {from || to || query ? "필터 적용 중" : "전체 기록"} ·{" "}
-                {sessions.length}회 <span>기간·검색</span>
-              </summary>
-              <div className="filter-fields">
-                <label>
-                  시작 날짜
-                  <input
-                    type="date"
-                    value={from}
-                    max={to || undefined}
-                    onChange={(e) => setFrom(e.target.value)}
-                  />
-                </label>
-                <label>
-                  끝 날짜
-                  <input
-                    type="date"
-                    value={to}
-                    min={from || undefined}
-                    onChange={(e) => setTo(e.target.value)}
-                  />
-                </label>
-                <label className="search-field">
-                  기록 검색
-                  <input
-                    placeholder="날짜 또는 거리 (km)"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </label>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setFrom("");
-                    setTo("");
-                    setQuery("");
-                  }}
-                >
-                  필터 초기화
-                </Button>
-              </div>
-            </details>
-            {data.warnings.length > 0 && (
+            {!(tab === "runs" && selected) && (
+              <details className="global-filters">
+                <summary>
+                  {from || to || query ? "필터 적용 중" : "전체 기록"} ·{" "}
+                  {sessions.length}회 <span>기간·검색</span>
+                </summary>
+                <div className="filter-fields">
+                  <label>
+                    시작 날짜
+                    <input
+                      type="date"
+                      value={from}
+                      max={to || undefined}
+                      onChange={(e) => setFrom(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    끝 날짜
+                    <input
+                      type="date"
+                      value={to}
+                      min={from || undefined}
+                      onChange={(e) => setTo(e.target.value)}
+                    />
+                  </label>
+                  <label className="search-field">
+                    기록 검색
+                    <input
+                      placeholder="날짜 또는 거리 (km)"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </label>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setFrom("");
+                      setTo("");
+                      setQuery("");
+                    }}
+                  >
+                    필터 초기화
+                  </Button>
+                </div>
+              </details>
+            )}
+            {data.warnings.length > 0 && !(tab === "runs" && selected) && (
               <details className="quality-warnings">
                 <summary>처리 안내 {data.warnings.length}건</summary>
                 {data.warnings.map((w, i) => (
@@ -466,7 +598,14 @@ export default function App() {
                   <Dashboard
                     sessions={sessions}
                     profiles={data.profiles}
+                    revision={data.revision ?? 0}
                     onOpen={openRun}
+                    onGrowth={(cfg) => {
+                      setGrowthConfig(cfg);
+                      setGrowthView("heart");
+                      changeTab("growth");
+                      window.scrollTo({ top: 0, behavior: "instant" });
+                    }}
                   />
                 ) : (
                   <p className="empty-note">
@@ -478,7 +617,15 @@ export default function App() {
                   <Growth
                     sessions={sessions}
                     profiles={data.profiles}
+                    revision={data.revision ?? 0}
                     onOpen={openRun}
+                    config={growthConfig}
+                    onConfig={setGrowthConfig}
+                    view={growthView}
+                    onView={setGrowthView}
+                    onExclude={(id, excluded) =>
+                      updateSession(id, { growthExcluded: excluded })
+                    }
                   />
                 ) : (
                   <p className="empty-note">
@@ -491,117 +638,176 @@ export default function App() {
                     <Button
                       variant="ghost"
                       className="back-button"
-                      onClick={() => {
-                        setSelectedId(null);
-                        setDetail(null);
-                        current.current.detail = 0;
-                      }}
+                      onClick={backFromRun}
                     >
                       <ArrowLeft size={16} />
-                      러닝 목록
+                      {returnTo.current.tab === "growth"
+                        ? "비교로 돌아가기"
+                        : returnTo.current.tab === "summary"
+                          ? "요약으로 돌아가기"
+                          : "러닝 목록"}
                     </Button>
                     <div className="run-heading">
-                      <p className="eyebrow">
-                        {selected.date} ·{" "}
-                        {selected.offsetMs === null
-                          ? "UTC · 시간대 미확인"
-                          : `UTC${selected.offsetMs < 0 ? "-" : "+"}${Math.abs(selected.offsetMs / 3600000)}`}
-                      </p>
-                      <h1>
-                        {num(
-                          selected.distanceM === null
-                            ? null
-                            : selected.distanceM / 1000,
-                          2,
-                        )}{" "}
-                        <span>km</span>
-                      </h1>
+                      <h1>{selected.date}</h1>
                       <div className="run-summary">
-                        <span>{duration(selected.durationMs)}</span>
                         <span>
-                          {pace(
-                            selected.durationMs !== null &&
-                              selected.distanceM !== null &&
-                              selected.distanceM > 0
-                              ? selected.durationMs / selected.distanceM
-                              : null,
+                          {num(
+                            selected.distanceM === null
+                              ? null
+                              : selected.distanceM / 1000,
+                            2,
                           )}{" "}
-                          /km
+                          km
                         </span>
-                        <span>요약 심박 {num(selected.meanHr)} bpm</span>
+                        <span>운동시간 {duration(selected.durationMs)}</span>
+                        <span>
+                          {pace(summaryPace(selected))} /km
+                          {summaryPace(selected) === null &&
+                          selected.durationMs &&
+                          selected.distanceM
+                            ? " · 요약 확인 필요"
+                            : ""}
+                        </span>
                       </div>
                       <p className="fine">
-                        삼성헬스 CSV 요약값 · 상세 그래프의 실제 경과시간과
-                        운동시간은 다를 수 있습니다.
+                        삼성 CSV 요약 · {selected.deviceGroup ?? "출처 미상"}
+                        {selected.offsetMs === null
+                          ? " · UTC 날짜 / 시간대 미확인"
+                          : ""}
                       </p>
                     </div>
-                    {selected.issues.length > 0 && (
-                      <details className="quality-warnings">
-                        <summary>
-                          데이터 품질 안내 {selected.issues.length}건
-                        </summary>
-                        {selected.issues.map((s, i) => (
-                          <p key={i}>{issueLabel(s)}</p>
-                        ))}
-                      </details>
-                    )}
                     {detailLoading ? (
                       <div className="loading-chart" role="status">
                         상세 관측을 읽고 있습니다…
                       </div>
                     ) : detail ? (
-                      <RunChart key={detail.id} detail={detail} />
+                      <RunChart
+                        key={detail.id}
+                        detail={detail}
+                        profile={profile}
+                        focus={focus}
+                      />
                     ) : (
                       <div className="empty-note">
                         {detailError ||
                           "이 기록에는 읽을 수 있는 상세 관측이 없습니다."}
                       </div>
                     )}
-                    {detail && (
-                      <section className="journal-section">
-                        <h2>기록의 관찰</h2>
-                        {profile?.observations.length ? (
-                          profile.observations.map((o, i) => (
-                            <article className="observation-row" key={i}>
-                              <small>
-                                {elapsed(o.from)}–{elapsed(o.to)}
-                              </small>
-                              <h3>{o.title}</h3>
-                              <p>{o.evidence}</p>
-                              <p className="fine">{o.limit}</p>
-                            </article>
-                          ))
-                        ) : (
-                          <p className="empty-note">
-                            짧은 심박 변화·케이던스 유사 패턴·감속 뒤 변화 중
-                            조건에 맞는 관찰이 없습니다. 데이터가 부족한
-                            구간에는 결과를 만들지 않습니다.
-                          </p>
-                        )}
+                    <section className="quality-warnings">
+                      <details>
+                        <summary>품질·원본 값과 분석 사용 설정</summary>
                         <p className="fine">
-                          상세 거리 유형:{" "}
-                          {detail.distanceSemantics === "interval"
-                            ? "구간값 후보"
-                            : detail.distanceSemantics === "cumulative"
-                              ? "누적값 후보"
-                              : "판별 보류"}
-                          . JSON 구간의 앞/뒤 대응이 확인되지 않아 구간거리와
-                          회복심박 추정은 제공하지 않습니다.
+                          삼성 원본: {duration(selected.durationMs)} ·{" "}
+                          {num(
+                            selected.distanceM === null
+                              ? null
+                              : selected.distanceM / 1000,
+                            2,
+                          )}{" "}
+                          km · 페이스{" "}
+                          {pace(
+                            selected.durationMs !== null && selected.distanceM
+                              ? selected.durationMs / selected.distanceM
+                              : null,
+                          )}{" "}
+                          /km · 요약 심박 {num(selected.meanHr)} bpm. 원본을
+                          보정하지 않습니다.
                         </p>
-                      </section>
-                    )}
+                        {selected.quality?.map((q, i) => (
+                          <p key={i}>
+                            {q.evidence}
+                            {q.from !== undefined
+                              ? ` (${Math.round(q.from)}–${Math.round(q.to ?? q.from)}초)`
+                              : ""}
+                          </p>
+                        ))}
+                        {!selected.quality?.length && (
+                          <p>추가 품질 안내가 없습니다.</p>
+                        )}
+                        <label className="check-setting">
+                          <input
+                            type="checkbox"
+                            checked={selected.inclusion === "exclude"}
+                            onChange={(e) =>
+                              updateSession(selected.id, {
+                                inclusion: e.target.checked
+                                  ? "exclude"
+                                  : "default",
+                              })
+                            }
+                          />
+                          요약 운동량에서 이 기록 제외
+                        </label>
+                        {selected.quality?.some(
+                          (q) => q.code === "short-record",
+                        ) && (
+                          <label className="check-setting">
+                            <input
+                              type="checkbox"
+                              checked={selected.inclusion === "include"}
+                              onChange={(e) =>
+                                updateSession(selected.id, {
+                                  inclusion: e.target.checked
+                                    ? "include"
+                                    : "default",
+                                })
+                              }
+                            />
+                            짧은 기록을 유효한 분할 운동으로 포함
+                          </label>
+                        )}
+                        <label className="check-setting">
+                          <input
+                            type="checkbox"
+                            checked={selected.growthExcluded ?? false}
+                            onChange={(e) =>
+                              updateSession(selected.id, {
+                                growthExcluded: e.target.checked,
+                              })
+                            }
+                          />
+                          성장 비교에서 이 러닝 제외
+                        </label>
+                        <p className="fine">
+                          읽을 수 없는 값이나 관측 공백은 설정으로 유효 데이터가
+                          되지 않습니다. 상세 분석과 요약 운동량은 각각
+                          판단합니다.
+                        </p>
+                      </details>
+                    </section>
                   </>
                 ) : (
                   <>
-                    <div className="page-heading">
-                      <p className="eyebrow">ONE RUN AT A TIME</p>
-                      <h1>
-                        하루의 러닝,
-                        <br />한 줄의 기록.
-                      </h1>
+                    <div className="page-heading compact-heading">
+                      <h1>러닝 기록</h1>
+                    </div>
+                    <div className="list-controls">
+                      <label>
+                        데이터 상태
+                        <select
+                          aria-label="기록 품질 필터"
+                          value={qualityFilter}
+                          onChange={(e) => setQualityFilter(e.target.value)}
+                        >
+                          <option value="all">전체</option>
+                          <option value="eligible">비교에 사용 가능</option>
+                          <option value="review">확인 필요</option>
+                        </select>
+                      </label>
+                      <label>
+                        순서
+                        <select
+                          aria-label="기록 정렬"
+                          value={order}
+                          onChange={(e) => setOrder(e.target.value)}
+                        >
+                          <option value="latest">최신순</option>
+                          <option value="oldest">과거순</option>
+                        </select>
+                      </label>
                     </div>
                     <div className="run-list">
-                      {sessions.map((s) => (
+                      {listedSessions.map((s) => (
                         <button
                           key={s.id}
                           className="run-row"
@@ -610,7 +816,8 @@ export default function App() {
                           <div className="run-date">
                             {s.date}
                             <small>
-                              {duration(s.durationMs)} ·{" "}
+                              {duration(s.durationMs)} · 심박 {num(s.meanHr)}{" "}
+                              bpm ·{" "}
                               {s.status === "ready"
                                 ? "상세 관측 있음"
                                 : s.status === "missing"
@@ -618,6 +825,10 @@ export default function App() {
                                   : s.status === "limited"
                                     ? "분석 제한"
                                     : "상세 확인 필요"}
+                              {!usesSummary(s, "pace")
+                                ? " · 요약 확인 필요"
+                                : ""}
+                              {s.growthExcluded ? " · 성장 제외" : ""}
                             </small>
                           </div>
                           <div className="run-distance">
@@ -628,20 +839,14 @@ export default function App() {
                             <small>km</small>
                           </div>
                           <div className="run-pace">
-                            {pace(
-                              s.durationMs !== null &&
-                                s.distanceM !== null &&
-                                s.distanceM > 0
-                                ? s.durationMs / s.distanceM
-                                : null,
-                            )}
+                            {pace(summaryPace(s))}
                             <small>/km</small>
                           </div>
                           <ArrowUpRight size={16} />
                         </button>
                       ))}
                     </div>
-                    {!sessions.length && (
+                    {!listedSessions.length && (
                       <p className="empty-note">조건에 맞는 기록이 없습니다.</p>
                     )}
                   </>
@@ -668,7 +873,12 @@ export default function App() {
                   </p>
                   <Button
                     onClick={() => {
-                      downloadReport(data, sessions, reportUrls.current);
+                      downloadReport(
+                        data,
+                        sessions,
+                        reportUrls.current,
+                        growthConfig,
+                      );
                       setReportOpen(false);
                     }}
                   >

@@ -1,4 +1,5 @@
 import type { Detail, Point } from "./types";
+import { intervals, quantile } from "./analysis";
 export type Metric = "hr" | "pace" | "cadence";
 export const METRICS: Metric[] = ["hr", "pace", "cadence"];
 export const metricInfo = {
@@ -23,7 +24,101 @@ export function domain(points: Point[], key: Metric): [number, number] {
   }
   if (!Number.isFinite(lo)) return [0, 1];
   const pad = Math.max((hi - lo) * 0.12, key === "pace" ? 10 : 5);
+  if (key === "hr" && hi - lo + pad * 2 < 20) {
+    const mid = (hi + lo) / 2;
+    return [Math.max(0, Math.floor(mid - 10)), Math.ceil(mid + 10)];
+  }
   return [Math.max(0, Math.floor(lo - pad)), Math.ceil(hi + pad)];
+}
+export function paceDomain(
+  detail: Detail,
+  from: number,
+  to: number,
+  full = false,
+): [number, number] {
+  const points = detail.points.filter((p) => p.time >= from && p.time <= to);
+  if (full) return domain(points, "pace");
+  const valid = intervals(detail, from, to).filter(
+    (x) => x.speed !== null && x.speed > 0,
+  );
+  const running = valid.filter(
+    (x) => x.speed! >= 1.8 && detail.points[x.index + 1].speed! >= 1.8,
+  );
+  const sec = running.reduce((s, x) => s + x.sec, 0),
+    all = valid.reduce((s, x) => s + x.sec, 0);
+  if (sec < 180 || !all || sec / all < 0.6) return domain(points, "pace");
+  const values = running.map((x) => ({
+    value: 1000 / x.speed!,
+    weight: x.sec,
+  }));
+  let low = quantile(values, 0.02)! - 15,
+    high = quantile(values, 0.98)! + 15;
+  if (high - low < 60) {
+    const mid = (high + low) / 2;
+    low = mid - 30;
+    high = mid + 30;
+  }
+  return [Math.max(0, Math.floor(low / 15) * 15), Math.ceil(high / 15) * 15];
+}
+export function timeTicks(from: number, to: number) {
+  const step =
+    [60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400].find(
+      (s) => (to - from) / s <= 4,
+    ) ?? Math.ceil((to - from) / 86400 / 4) * 86400;
+  const ticks: number[] = [];
+  for (let t = Math.ceil(from / step) * step; t <= to; t += step) ticks.push(t);
+  return ticks.length >= 2 ? ticks : [from, to];
+}
+export function trendPoints(
+  detail: Detail,
+  from: number,
+  to: number,
+  paceRange: [number, number],
+) {
+  const source = intervals(detail);
+  const groups: { from: number; to: number; data: typeof source }[] = [];
+  for (const v of source) {
+    if (v.hr === null) continue;
+    const last = groups.at(-1);
+    if (last && last.to === v.from) {
+      last.to = v.to;
+      last.data.push(v);
+    } else groups.push({ from: v.from, to: v.to, data: [v] });
+  }
+  let groupIndex = 0,
+    startIndex = 0;
+  return chartPoints(detail, from, to).map((p) => {
+    while (groupIndex < groups.length - 1 && groups[groupIndex].to < p.time) {
+      groupIndex++;
+      startIndex = 0;
+    }
+    const g = groups[groupIndex];
+    let hrTrend: number | null = null;
+    if (p.hr !== null && g && p.time >= g.from && p.time <= g.to) {
+      const a = Math.max(p.time - 30, g.from),
+        b = Math.min(p.time + 30, g.to);
+      while (startIndex < g.data.length && g.data[startIndex].to <= a)
+        startIndex++;
+      const values: { value: number; weight: number }[] = [];
+      for (let i = startIndex; i < g.data.length && g.data[i].from < b; i++) {
+        const x = g.data[i];
+        values.push({
+          value: x.hr!,
+          weight: Math.max(0, Math.min(b, x.to) - Math.max(a, x.from)),
+        });
+      }
+      const sec = values.reduce((s, x) => s + x.weight, 0);
+      if (sec >= 30 && sec / (b - a) >= 0.7) hrTrend = quantile(values, 0.5);
+    }
+    return {
+      ...p,
+      hrTrend,
+      pace:
+        p.pace !== null && (p.pace < paceRange[0] || p.pace > paceRange[1])
+          ? null
+          : p.pace,
+    };
+  });
 }
 export function nearest(points: Point[], time: number): number {
   let lo = 0,

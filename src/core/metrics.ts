@@ -1,4 +1,6 @@
 import { median } from "./parser";
+import { usesSummary } from "./quality";
+import { buildStableWindows, halfComparison, longestRun } from "./analysis";
 import type {
   Detail,
   Drift,
@@ -7,13 +9,18 @@ import type {
   Profile,
   Summary,
 } from "./types";
-export function aggregate(sessions: Summary[], profiles: Profile[]) {
+export function aggregate(
+  sessions: Summary[],
+  profiles: Profile[],
+  raw = false,
+) {
   const paired = sessions.filter(
     (s) =>
       s.durationMs !== null &&
       s.durationMs > 0 &&
       s.distanceM !== null &&
-      s.distanceM > 0,
+      s.distanceM > 0 &&
+      usesSummary(s, "pace", raw),
   );
   const duration = paired.reduce((sum, s) => sum + s.durationMs!, 0),
     distance = paired.reduce((sum, s) => sum + s.distanceM!, 0);
@@ -28,12 +35,24 @@ export function aggregate(sessions: Summary[], profiles: Profile[]) {
     .filter((x): x is number => x !== null);
   return {
     count: sessions.length,
-    distanceM: sessions.some((s) => s.distanceM !== null)
-      ? sessions.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
+    distanceM: sessions.some(
+      (s) => s.distanceM !== null && usesSummary(s, "distance", raw),
+    )
+      ? sessions.reduce(
+          (sum, s) =>
+            sum + (usesSummary(s, "distance", raw) ? (s.distanceM ?? 0) : 0),
+          0,
+        )
       : null,
     distanceMissing: sessions.filter((s) => s.distanceM === null).length,
-    durationMs: sessions.some((s) => s.durationMs !== null)
-      ? sessions.reduce((sum, s) => sum + (s.durationMs ?? 0), 0)
+    durationMs: sessions.some(
+      (s) => s.durationMs !== null && usesSummary(s, "duration", raw),
+    )
+      ? sessions.reduce(
+          (sum, s) =>
+            sum + (usesSummary(s, "duration", raw) ? (s.durationMs ?? 0) : 0),
+          0,
+        )
       : null,
     durationMissing: sessions.filter((s) => s.durationMs === null).length,
     pace: distance > 0 ? duration / distance : null,
@@ -52,6 +71,12 @@ export function aggregate(sessions: Summary[], profiles: Profile[]) {
       : fallback.length
         ? "상세 관측"
         : "관측 없음",
+    durationSessions: sessions.filter(
+      (s) => s.durationMs !== null && usesSummary(s, "duration", raw),
+    ).length,
+    distanceSessions: sessions.filter(
+      (s) => s.distanceM !== null && usesSummary(s, "distance", raw),
+    ).length,
   };
 }
 export function observedStats(detail: Detail, from = 0, to = Infinity) {
@@ -65,11 +90,13 @@ export function observedStats(detail: Detail, from = 0, to = Infinity) {
   let samples = 0;
   for (let i = 0; i < detail.points.length; i++) {
     const p = detail.points[i];
-    if (p.time < from || p.time > to) continue;
-    samples++;
-    if (p.hr !== null) maxHr = Math.max(maxHr ?? 0, p.hr);
+    if (p.time >= from && p.time <= to) {
+      samples++;
+      if (p.hr !== null) maxHr = Math.max(maxHr ?? 0, p.hr);
+    }
     const next = detail.points[i + 1];
     if (!next) continue;
+    if (next.time <= from || p.time >= to) continue;
     const delta = next.time - p.time;
     if (delta <= 0 || delta > detail.gapSec) continue;
     const w = Math.max(0, Math.min(next.time, to) - Math.max(p.time, from));
@@ -89,8 +116,7 @@ export function observedStats(detail: Detail, from = 0, to = Infinity) {
   }
   const extent = Math.max(
     0,
-    Math.min(to, detail.points.at(-1)?.time ?? 0) -
-      Math.max(from, detail.points[0]?.time ?? 0),
+    (Number.isFinite(to) ? to : (detail.points.at(-1)?.time ?? 0)) - from,
   );
   return {
     hrSum,
@@ -101,6 +127,10 @@ export function observedStats(detail: Detail, from = 0, to = Infinity) {
     meanSpeed: speedSec ? speedSum / speedSec : null,
     meanCadence: cadSec ? cadSum / cadSec : null,
     coverage: extent ? hrSec / extent : 0,
+    speedCoverage: extent ? speedSec / extent : 0,
+    cadenceCoverage: extent ? cadSec / extent : 0,
+    speedSec,
+    cadSec,
   };
 }
 export function movement(
@@ -393,6 +423,7 @@ export function profile(detail: Detail): Profile {
     bin.hrs.push(p.hr);
     bin.sec += p.weight;
   }
+  const stable = buildStableWindows(detail);
   return {
     id: detail.id,
     hrSum: stats.hrSum,
@@ -402,6 +433,10 @@ export function profile(detail: Detail): Profile {
     pairCount: pairs.length,
     observations: observations(detail),
     drift: driftAnalysis(detail, pairs),
+    windows: stable.windows,
+    windowDiagnostics: stable.diagnostics,
+    longestRunSec: longestRun(detail),
+    halves: halfComparison(detail),
   };
 }
 export function growthRows(

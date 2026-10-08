@@ -32,12 +32,12 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
   await expect(page.getByText("전체 기록 · 4회")).toBeVisible();
   await page.getByRole("button", { name: "러닝", exact: true }).click();
   await page.locator(".run-row").first().click();
-  await expect(page.getByTestId("timeline")).toHaveCount(3);
+  await expect(page.getByTestId("timeline")).toHaveCount(2);
   await expect(page.locator(".recharts-line-curve").first()).toBeVisible();
   await expect(page.getByTestId("readout")).toContainText("시점을 선택하면");
   await page.getByLabel("관측 시점", { exact: true }).fill("100");
   const readout = await page.getByTestId("readout").innerText();
-  await expect(page.getByTestId("shared-cursor")).toHaveCount(3);
+  await expect(page.getByTestId("shared-cursor")).toHaveCount(2);
   const cursorPositions = await page
     .getByTestId("shared-cursor")
     .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x));
@@ -88,9 +88,13 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
   expect(overflow).toBe(false);
   await page.getByRole("button", { name: "성장", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "비교할 페이스 구간", exact: true }),
+    page.getByRole("heading", { name: "성장과 변화", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".growth-table")).toContainText("4회");
+  await expect(page.getByTestId("comparison-answer")).toHaveAttribute(
+    "data-state",
+    "insufficient",
+  );
+  await expect(page.locator(".period-values")).toContainText("4회");
   await page
     .getByRole("button", { name: "리포트 다운로드", exact: true })
     .click();
@@ -101,7 +105,17 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
   const report = await readFile((await download.path())!, "utf8");
   expect(report).not.toContain("test-uuid");
   expect(report).not.toContain("test-0.json");
-  expect(JSON.parse(report).sessions).toHaveLength(4);
+  const parsed = JSON.parse(report);
+  expect(parsed.sessions).toHaveLength(4);
+  expect(parsed.calculationVersion).toBe("0.2.0");
+  expect(parsed.inputRevision).toBeGreaterThan(0);
+  expect(parsed.comparisons).toHaveLength(2);
+  expect(parsed.comparisons[0]).toMatchObject({
+    question: "heart",
+    width: 0.08,
+  });
+  expect(parsed.comparisons[0].elapsedRangeSec).toEqual([300, 1200]);
+  expect(report).not.toContain("synthetic-device");
   await page.getByText("전체 기록 · 4회").click();
   await page.getByLabel("시작 날짜", { exact: true }).fill("2026-01-04");
   await expect(page.locator(".global-filters")).toContainText("1회");
@@ -176,7 +190,7 @@ test("320px view, pointer pinning and no horizontal overflow", async ({
   ).toBe(false);
   await page.getByRole("button", { name: "러닝", exact: true }).click();
   await page.locator(".run-row").click();
-  await expect(page.getByTestId("timeline")).toHaveCount(3);
+  await expect(page.getByTestId("timeline")).toHaveCount(2);
   await page
     .getByTestId("timeline")
     .first()
@@ -189,4 +203,113 @@ test("320px view, pointer pinning and no horizontal overflow", async ({
     ),
   ).toBe(false);
   await expect(page.getByTestId("readout")).toContainText("고정");
+  await page
+    .getByRole("button", { name: "다른 ZIP 선택", exact: true })
+    .click();
+  await page.getByLabel("삼성헬스 ZIP 선택", { exact: true }).setInputFiles({
+    name: "synthetic-gaps.zip",
+    mimeType: "application/zip",
+    buffer: await testZip(1, false, "gaps"),
+  });
+  await page.getByRole("button", { name: "러닝", exact: true }).click();
+  await page.locator(".run-row").click();
+  await expect(
+    page.getByLabel("시간축 관측 범위", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".segment-stats")).toContainText("심박 관측 부족");
+  await page
+    .getByLabel("시간축 관측 범위", { exact: true })
+    .selectOption("[0,1200]");
+  await expect(page.locator(".segment-stats")).toContainText("관측 평균 심박");
+  await page.getByRole("button", { name: "구간 선택", exact: true }).click();
+  await expect(page.getByLabel("구간 끝", { exact: true })).toHaveValue("1200");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+});
+
+test("v0.2 comparison evidence, question changes, exclusions and return preserve conditions", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await page.getByLabel("삼성헬스 ZIP 선택", { exact: true }).setInputFiles({
+    name: "synthetic-growth.zip",
+    mimeType: "application/zip",
+    buffer: await testZip(16, false, "growth"),
+  });
+  await expect(
+    page.getByRole("navigation", { name: "주요 화면" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "성장", exact: true }).click();
+  await expect(page.getByTestId("comparison-answer")).toHaveAttribute(
+    "data-state",
+    "ready",
+  );
+  await expect(page.getByTestId("comparison-answer")).toContainText("-5.0");
+  await page.getByLabel("비교 기간", { exact: true }).selectOption("custom");
+  await expect(page.getByLabel("기간 길이", { exact: true })).toBeVisible();
+  await page.getByLabel("비교 기간", { exact: true }).selectOption("28");
+  await page.getByText("비교 조건 조정", { exact: true }).click();
+  await page
+    .locator('[data-testid="comparison-plot"] .recharts-scatter-symbol')
+    .first()
+    .click();
+  await expect(page.getByLabel("구간 시작", { exact: true })).toHaveValue(
+    "360",
+  );
+  await page
+    .getByRole("button", { name: "비교로 돌아가기", exact: true })
+    .click();
+  const paceBefore = await page
+    .getByLabel("비교 페이스", { exact: true })
+    .inputValue();
+  await page.locator(".evidence-record summary").first().click();
+  await page.locator(".evidence-windows button").first().click();
+  await expect(page.getByLabel("구간 시작", { exact: true })).toHaveValue(
+    "360",
+  );
+  await expect(
+    page.getByRole("button", { name: "비교로 돌아가기", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "비교로 돌아가기", exact: true })
+    .click();
+  await expect(page.getByLabel("비교 페이스", { exact: true })).toHaveValue(
+    paceBefore,
+  );
+  await page.locator(".evidence-record summary").first().click();
+  await page
+    .getByRole("button", { name: "이 러닝을 성장 비교에서 제외", exact: true })
+    .first()
+    .click();
+  await expect(page.getByTestId("comparison-answer")).toContainText("이전 7회");
+  await page.getByText("제외된 기록 1회와 이유", { exact: true }).click();
+  await page.getByRole("button", { name: "다시 포함", exact: true }).click();
+  await expect(page.getByTestId("comparison-answer")).toContainText("이전 8회");
+  await page.getByLabel("성장 질문", { exact: true }).selectOption("pace");
+  await expect(page.getByLabel("비교 심박", { exact: true })).toBeVisible();
+  await expect(page.locator(".period-values")).toContainText("/km");
+  await page.getByLabel("성장 질문", { exact: true }).selectOption("duration");
+  await expect(
+    page.getByRole("heading", { name: "더 오래 달렸나?", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".growth-table")).toContainText(
+    "이어진 달리기 추정",
+  );
+  await page.getByLabel("성장 질문", { exact: true }).selectOption("halves");
+  await expect(page.getByText(/전후반 비교 16회/)).toBeVisible();
+  await page.getByLabel("성장 질문", { exact: true }).selectOption("habit");
+  await expect(
+    page.getByRole("heading", { name: "꾸준히 달렸나?", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  expect(errors).toEqual([]);
 });

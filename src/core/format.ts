@@ -34,6 +34,11 @@ export function issueLabel(code: string) {
         "ambiguous-reference": "여러 상세 파일이 같은 이름을 사용합니다",
         "invalid-reference": "지원하지 않는 상세 파일 참조",
         "session-conflict": "중복 기록에 값 차이가 있습니다",
+        "short-record": "짧은 기록 · 기본 추세 제외",
+        "duration-conflict": "요약 운동시간 확인 필요",
+        "summary-pace-review": "요약 시간·거리 비율 확인 필요",
+        "summary-detail-speed": "요약·상세 속도 불일치",
+        "observation-gap": "관측 공백 있음",
       } as Record<string, string>
     )[code] ?? "데이터 품질 확인 필요"
   );

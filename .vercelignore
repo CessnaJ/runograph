@@ -6,5 +6,6 @@ samsunghealth*/
 private-data/
 test-results/
 playwright-report/
+.playwright-cli/
 .git/
 .DS_Store

@@ -1052,3 +1052,393 @@ input,
 select {
   font-size: 16px;
 }
+
+/* v0.2: the observation and its chart lead each page. */
+.compact-heading {
+  margin: 24px 0;
+}
+.compact-heading h1 {
+  font-size: 27px;
+  line-height: 1.35;
+  margin: 0 0 10px;
+  letter-spacing: -0.8px;
+}
+.question-control {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.question-control select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font-size: 15px;
+}
+.comparison-controls,
+.list-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 18px 0;
+}
+.comparison-controls label,
+.list-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.comparison-controls strong {
+  font-size: 22px;
+}
+.comparison-controls select,
+.list-controls select {
+  width: 100%;
+  font-size: 14px;
+}
+.period-caption {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 16px 0;
+}
+.comparison-answer {
+  padding: 18px 0;
+}
+.comparison-answer h2 {
+  font-size: 21px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.comparison-answer p {
+  margin: 7px 0;
+}
+.status-label {
+  display: inline-block;
+  font-size: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.answer-number {
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+}
+.answer-number small {
+  font-size: 13px;
+  color: var(--muted);
+}
+.compact-chart {
+  height: 180px;
+  margin: 12px 0;
+}
+.growth-chart {
+  position: relative;
+}
+.chart-empty {
+  position: absolute;
+  inset: 70px 24px auto;
+  text-align: center;
+  color: var(--muted);
+  background: var(--page);
+  font-size: 14px;
+}
+.period-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.period-values > div {
+  min-width: 0;
+}
+.period-values strong {
+  display: block;
+  font-size: 28px;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+}
+.period-values span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.period-values small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.evidence-record {
+  border-bottom: 1px solid var(--rule);
+  padding: 8px 0;
+}
+.evidence-record summary {
+  font-size: 13px;
+}
+.evidence-windows {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.evidence-windows button {
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
+}
+.excluded-row {
+  border-bottom: 1px solid var(--rule);
+  padding: 8px 0;
+}
+.text-button {
+  text-align: left;
+  padding: 10px 0;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.training-answer p {
+  margin-top: 12px;
+}
+.growth-table details {
+  grid-column: span 2;
+}
+.list-controls {
+  margin-top: 0;
+}
+.is-detail .app-header {
+  height: 52px;
+}
+.is-detail .main-tabs button {
+  padding: 10px 0;
+  font-size: 16px;
+  min-height: 44px;
+}
+.is-detail .journal-main {
+  padding-top: 0;
+}
+.is-detail .back-button {
+  margin: 0;
+  min-height: 36px;
+  font-size: 13px;
+}
+.is-detail .run-heading {
+  margin: 0 0 8px;
+}
+.is-detail .run-heading h1 {
+  font-size: 20px;
+  letter-spacing: -0.3px;
+  line-height: 1.4;
+  margin: 0;
+}
+.is-detail .run-summary {
+  gap: 6px 12px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+.is-detail .run-heading p {
+  font-size: 11px;
+}
+.is-detail .chart-section {
+  margin: 0;
+  scroll-margin-top: 48px;
+}
+.is-detail .chart-toolbar {
+  margin: 0 0 8px;
+  min-height: 44px;
+}
+.is-detail .chart-panel {
+  margin: 0 0 10px;
+}
+.plot-heart {
+  height: 240px;
+}
+.plot-pace {
+  height: 110px;
+}
+.plot-combined {
+  height: 240px;
+}
+.readout {
+  min-height: 0;
+  padding: 8px 0;
+  margin: 10px 0;
+  border: 0;
+}
+.readout-time {
+  margin-bottom: 4px;
+}
+.readout-values b {
+  font-size: 21px;
+}
+.focus-note {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 6px 0;
+  color: var(--muted);
+}
+.chart-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+}
+.chart-options button {
+  font-size: 12px;
+  padding: 0 8px;
+}
+.outside-point {
+  position: absolute;
+  width: 30px;
+  height: 28px;
+  min-height: 28px;
+  transform: translateX(-50%);
+  padding: 0;
+  border: 0;
+  color: var(--pace);
+  background: transparent;
+  font-size: 13px;
+  z-index: 2;
+}
+.outlier-list {
+  font-size: 12px;
+}
+.outlier-list button {
+  font-size: 12px;
+}
+.run-thirds {
+  margin: 22px 0;
+}
+.thirds-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.thirds-grid button {
+  text-align: left;
+  padding: 10px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink);
+  min-width: 0;
+}
+.thirds-grid b,
+.thirds-grid span,
+.thirds-grid small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.thirds-grid b {
+  font-size: 16px;
+  margin: 6px 0;
+}
+.thirds-grid small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.time-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+.time-inputs label {
+  font-size: 13px;
+}
+.time-inputs input {
+  width: 100%;
+}
+.check-setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin: 8px 0;
+}
+.check-setting input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+@media (max-width: 350px) {
+  .comparison-controls {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .thirds-grid {
+    gap: 4px;
+  }
+  .thirds-grid button {
+    padding: 8px 4px;
+  }
+  .thirds-grid b {
+    font-size: 14px;
+  }
+  .period-values strong {
+    font-size: 25px;
+  }
+}
+.app-header {
+  height: 58px;
+}
+.compact-heading {
+  margin: 18px 0;
+}
+.compact-heading h1 {
+  font-size: 24px;
+}
+.comparison-answer {
+  padding: 12px 0;
+}
+.comparison-answer h2 {
+  font-size: 20px;
+  line-height: 1.45;
+}
+.comparison-notes summary {
+  min-height: 32px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.growth-chart:not(.compact-chart) {
+  height: 220px;
+}
+
+.question-control select {
+  margin-top: 0;
+}
+.comparison-controls {
+  margin: 12px 0;
+}
+.comparison-controls .target-control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+.target-control input {
+  grid-column: span 2;
+}
+.period-caption {
+  margin: 10px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.time-scope {
+  display: block;
+  margin: 8px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.time-scope select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 14px;
+}
