@@ -85,7 +85,13 @@ async function handle(msg: WorkerRequest) {
       send({
         type: "DATA",
         requestId: msg.requestId,
-        data: { sessions, profiles, warnings, revision: msg.requestId },
+        data: {
+          source: archive.source,
+          sessions,
+          profiles,
+          warnings,
+          revision: msg.requestId,
+        },
       });
     } else if (msg.type === "SAVE") {
       if (!archive) throw new Error("ZIP을 다시 선택해 주세요.");

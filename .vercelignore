@@ -9,3 +9,10 @@ playwright-report/
 .playwright-cli/
 .git/
 .DS_Store
+
+# Private Apple Health exports
+apple_health_export*/
+**/apple_health_export*/
+**/export.xml
+**/export_cda.xml
+**/*.gpx

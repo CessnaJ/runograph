@@ -21,13 +21,11 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
   expect(response!.headers()["content-security-policy"]).toContain(
     "connect-src 'none'",
   );
-  await page
-    .getByLabel("삼성헬스 ZIP 불러오기", { exact: true })
-    .setInputFiles({
-      name: "synthetic-test.zip",
-      mimeType: "application/zip",
-      buffer: await testZip(),
-    });
+  await page.getByLabel("러닝 파일 불러오기", { exact: true }).setInputFiles({
+    name: "synthetic-test.zip",
+    mimeType: "application/zip",
+    buffer: await testZip(),
+  });
   await expect(
     page.getByRole("navigation", { name: "주요 화면" }),
   ).toBeVisible();
@@ -129,7 +127,7 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
     .getByRole("button", { name: "불러온 기록 지우기", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "삼성헬스 ZIP 불러오기", exact: true }),
+    page.getByRole("button", { name: "러닝 파일 불러오기", exact: true }),
   ).toBeVisible();
   expect(consoleErrors).toEqual([]);
   expect(external).toEqual([]);
@@ -148,7 +146,7 @@ test("malformed ZIP recovery and cancellation allow reselection", async ({
   page,
 }) => {
   await page.goto("/");
-  const file = page.getByLabel("삼성헬스 ZIP 불러오기", { exact: true });
+  const file = page.getByLabel("러닝 파일 불러오기", { exact: true });
   await file.setInputFiles({
     name: "bad.zip",
     mimeType: "application/zip",
@@ -179,13 +177,11 @@ test("320px view, pointer pinning and no horizontal overflow", async ({
 }) => {
   await page.setViewportSize({ width: 320, height: 780 });
   await page.goto("/");
-  await page
-    .getByLabel("삼성헬스 ZIP 불러오기", { exact: true })
-    .setInputFiles({
-      name: "synthetic.zip",
-      mimeType: "application/zip",
-      buffer: await testZip(1),
-    });
+  await page.getByLabel("러닝 파일 불러오기", { exact: true }).setInputFiles({
+    name: "synthetic.zip",
+    mimeType: "application/zip",
+    buffer: await testZip(1),
+  });
   await expect(
     page.getByRole("navigation", { name: "주요 화면" }),
   ).toBeVisible();
@@ -210,15 +206,13 @@ test("320px view, pointer pinning and no horizontal overflow", async ({
   ).toBe(false);
   await expect(page.getByTestId("readout")).toContainText("고정");
   await page
-    .getByRole("button", { name: "다른 ZIP 선택", exact: true })
+    .getByRole("button", { name: "다른 파일 선택", exact: true })
     .click();
-  await page
-    .getByLabel("삼성헬스 ZIP 불러오기", { exact: true })
-    .setInputFiles({
-      name: "synthetic-gaps.zip",
-      mimeType: "application/zip",
-      buffer: await testZip(1, false, "gaps"),
-    });
+  await page.getByLabel("러닝 파일 불러오기", { exact: true }).setInputFiles({
+    name: "synthetic-gaps.zip",
+    mimeType: "application/zip",
+    buffer: await testZip(1, false, "gaps"),
+  });
   await page.getByRole("button", { name: "러닝", exact: true }).click();
   await page.locator(".run-row").click();
   await expect(
@@ -246,13 +240,11 @@ test("v0.2 comparison evidence, question changes, exclusions and return preserve
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
-  await page
-    .getByLabel("삼성헬스 ZIP 불러오기", { exact: true })
-    .setInputFiles({
-      name: "synthetic-growth.zip",
-      mimeType: "application/zip",
-      buffer: await testZip(16, false, "growth"),
-    });
+  await page.getByLabel("러닝 파일 불러오기", { exact: true }).setInputFiles({
+    name: "synthetic-growth.zip",
+    mimeType: "application/zip",
+    buffer: await testZip(16, false, "growth"),
+  });
   await expect(
     page.getByRole("navigation", { name: "주요 화면" }),
   ).toBeVisible();

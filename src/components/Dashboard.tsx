@@ -1,4 +1,5 @@
 import { recap } from "../core/review";
+import { APPLE_DETAIL_NOTICE } from "../core/copy";
 import { useMemo } from "react";
 import {
   Bar,
@@ -130,6 +131,15 @@ export function Dashboard({
               이 구간 그래프 보기 →
             </Button>
           </>
+        ) : latest.source === "apple" ? (
+          <>
+            <p className="recap-context">
+              요약 평균 심박 {num(latest.meanHr)} bpm · 최대 심박{" "}
+              {num(latest.maxHr)} bpm
+            </p>
+            <p className="subtle">{APPLE_DETAIL_NOTICE}</p>
+            <Button onClick={() => onOpen(latest.id)}>러닝 요약 보기 →</Button>
+          </>
         ) : (
           <>
             <h2>이번 기록의 흐름을 살펴보세요.</h2>
@@ -245,7 +255,7 @@ export function Dashboard({
               러닝별 페이스를 느린 순서대로 놓았을 때 가운데 값이에요.
             </p>
             <p className="fine">
-              삼성헬스 원본 합계:{" "}
+              원본 기록 합계:{" "}
               {num(raw.distanceM === null ? null : raw.distanceM / 1000, 2)}km ·{" "}
               {duration(raw.durationMs)}. 전체 {raw.count}회 중 거리 계산에{" "}
               {stats.distanceSessions}회, 시간 계산에 {stats.durationSessions}

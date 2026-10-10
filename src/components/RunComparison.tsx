@@ -10,6 +10,8 @@ import {
 import { Button } from "./ui/button";
 import { duration, elapsed, num, pace } from "../core/format";
 import { changeText, runPair } from "../core/review";
+import { APPLE_DETAIL_NOTICE } from "../core/copy";
+import { summaryPace, usesSummary } from "../core/quality";
 import type { Detail, EvidenceRef, Summary } from "../core/types";
 
 export function RunComparison({
@@ -33,6 +35,7 @@ export function RunComparison({
 }) {
   const pair = useMemo(() => (details ? runPair(...details) : null), [details]);
   const runs = ids.map((id) => sessions.find((s) => s.id === id));
+  const summaryOnly = runs.some((s) => s?.source === "apple");
   const sorted = [...sessions].sort((a, b) => b.startMs - a.startMs);
   const usable =
     pair &&
@@ -81,12 +84,80 @@ export function RunComparison({
       </div>
       {!ids[0] || !ids[1] ? (
         <p className="empty-note">
-          두 기록을 고르면 같은 운동 경과시간의 심박과 페이스를 비교해요.
+          {sessions.some((s) => s.source === "apple")
+            ? "두 기록을 고르면 전체 거리·운동시간·평균 페이스·요약 심박을 나란히 볼 수 있어요."
+            : "두 기록을 고르면 같은 운동 경과시간의 심박과 페이스를 비교해요."}
         </p>
       ) : loading ? (
         <p role="status" className="loading-panel">
           두 러닝의 측정값을 읽고 있어요…
         </p>
+      ) : summaryOnly ? (
+        <section aria-label="두 러닝 요약 비교">
+          <p className="fine">{APPLE_DETAIL_NOTICE}</p>
+          <table className="pair-table">
+            <caption>두 러닝의 전체 요약</caption>
+            <thead>
+              <tr>
+                <th scope="col">항목</th>
+                {runs.map((s) => (
+                  <th key={s?.id} scope="col">
+                    {s?.date}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  [
+                    "거리",
+                    (s: Summary) =>
+                      `${num(s.distanceM === null || !usesSummary(s, "distance") ? null : s.distanceM / 1000, 2)} km`,
+                  ],
+                  [
+                    "운동시간",
+                    (s: Summary) =>
+                      duration(
+                        usesSummary(s, "duration") ? s.durationMs : null,
+                      ),
+                  ],
+                  [
+                    "평균 페이스",
+                    (s: Summary) => `${pace(summaryPace(s))} /km`,
+                  ],
+                  ["요약 평균 심박", (s: Summary) => `${num(s.meanHr)} bpm`],
+                  ["요약 최대 심박", (s: Summary) => `${num(s.maxHr)} bpm`],
+                ] as const
+              ).map(([label, value]) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  {runs.map((s) => (
+                    <td key={s?.id}>{s ? value(s) : "—"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="fine">
+            전체 운동 요약이에요. 같은 구간·코스·강도를 비교한 값은 아니에요.
+            없는 값이나 확인이 필요한 시간·거리는 —로 표시해요.
+          </p>
+          <div className="pair-actions">
+            {runs.map(
+              (s, i) =>
+                s && (
+                  <Button
+                    key={s.id}
+                    variant="outline"
+                    onClick={() => onOpen(s.id)}
+                  >
+                    {i === 0 ? "기준" : "비교"} 러닝 요약 보기 →
+                  </Button>
+                ),
+            )}
+          </div>
+        </section>
       ) : error ? (
         <p role="alert" className="empty-note">
           {error}

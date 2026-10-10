@@ -9,6 +9,11 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
       metrics: ["duration", "distance", "pace"],
       action: "review",
     });
+  if (s.issues.includes("apple-overlap"))
+    review(
+      "apple-overlap",
+      "시간이 겹치는 러닝이 있어 중복일 수 있어요. 기본 합계에서 제외하며 직접 포함할 수 있어요.",
+    );
   if (s.durationMs !== null && s.durationMs < 60000)
     review(
       "short-record",
@@ -86,6 +91,7 @@ export function usesSummary(
         "duration-conflict",
         "summary-pace-review",
         "summary-detail-speed",
+        "apple-overlap",
       ].includes(c),
     ),
   ]);
@@ -97,7 +103,10 @@ export function usesSummary(
     s.durationMs / s.distanceM < 120
   )
     codes.add("summary-pace-review");
-  if (s.inclusion === "include") codes.delete("short-record");
+  if (s.inclusion === "include") {
+    codes.delete("short-record");
+    codes.delete("apple-overlap");
+  }
   return codes.size === 0;
 }
 export function datedActivity(s: Summary) {

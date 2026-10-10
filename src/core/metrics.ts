@@ -67,7 +67,7 @@ export function aggregate(
     hrSessions: ps.filter((p) => p.hrSec > 0).length,
     paceSessions: paired.length,
     maxSource: max.length
-      ? "삼성헬스 요약"
+      ? "원본 운동 요약"
       : fallback.length
         ? "시간별 측정값"
         : "측정값 없음",

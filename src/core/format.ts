@@ -28,6 +28,12 @@ export function issueLabel(code: string) {
   return (
     (
       {
+        "apple-summary-only": "애플 건강은 현재 러닝 요약만 지원",
+        "apple-summary-missing":
+          "요약값이 없거나 단위를 확인할 수 없어 빈 값으로 표시",
+        "apple-summary-conflict":
+          "서로 다른 요약값이 있어 해당 값을 표시하지 않음",
+        "apple-overlap": "시간이 겹치는 러닝 · 중복 확인 전 기본 합계에서 제외",
         "offset-unknown": "시간대 정보 없음 · UTC 날짜로 표시",
         "conflicting-points": "같은 시각에 서로 다른 값이 있어 계산에서 뺐어요",
         "size-limit": "측정 파일이 너무 커요",

@@ -5,6 +5,8 @@ import {
   type FileEntry,
 } from "@zip.js/zip.js";
 import { parseDetail, parseExerciseCsv } from "./parser";
+import { AppleHealthParser, APPLE_LIMITS } from "./apple";
+import { APPLE_DETAIL_NOTICE } from "./copy";
 import type { Detail, InternalSummary } from "./types";
 export const LIMITS = {
   zip: 512 * 1024 ** 2,
@@ -29,6 +31,7 @@ export function mainCsv(path: string): boolean {
   );
 }
 export class Archive {
+  source: "samsung" | "apple" = "samsung";
   private reader: ZipReader<Blob>;
   private json = new Map<string, FileEntry[]>();
   private cache = new Map<string, Detail>();
@@ -44,12 +47,26 @@ export class Archive {
     progress: (phase: string, percent: number) => void,
     signal?: AbortSignal,
   ) {
+    const head = await file.slice(0, 128).text();
+    const isXml = /^\s*(?:<\?xml\b|<HealthData\b|<!DOCTYPE\b)/.test(head);
+    if (isXml) {
+      const archive = new Archive(file);
+      archive.source = "apple";
+      const result = await archive.readApple(
+        file.size,
+        (sink) => file.stream().pipeTo(sink, { signal }),
+        progress,
+        signal,
+      );
+      return { archive, ...result };
+    }
     if (file.size > LIMITS.zip)
       throw new Error(
         "512 MB까지 읽을 수 있어요. 이 ZIP은 크기 제한을 넘었어요. 더 작은 내보내기 파일을 선택해 주세요.",
       );
     const archive = new Archive(file);
     const csv: FileEntry[] = [];
+    const xml: FileEntry[] = [];
     const names = new Set<string>();
     let count = 0;
     try {
@@ -62,13 +79,14 @@ export class Archive {
           );
         if (!safePath(entry.filename) || names.has(entry.filename))
           throw new Error(
-            "ZIP 안에 읽을 수 없는 파일 경로나 중복된 파일이 있어요. 삼성헬스에서 다시 다운로드한 ZIP을 선택해 주세요.",
+            "ZIP 안에 읽을 수 없는 파일 경로나 중복된 파일이 있어요. 원본 내보내기 ZIP을 선택해 주세요.",
           );
         names.add(entry.filename);
         if (count % 500 === 0)
           progress(`ZIP 안의 파일 확인 · ${count.toLocaleString()}개`, 0);
         if (entry.directory) continue;
-        if (mainCsv(entry.filename)) csv.push(entry);
+        if (entry.filename.split("/").at(-1) === "export.xml") xml.push(entry);
+        else if (mainCsv(entry.filename)) csv.push(entry);
         else if (
           /(?:^|\/)jsons\/com\.samsung\.(?:shealth|health)\.exercise\//.test(
             entry.filename,
@@ -79,11 +97,33 @@ export class Archive {
           archive.json.set(name, [...(archive.json.get(name) ?? []), entry]);
         }
       }
+      if (xml.length) {
+        if (xml.length !== 1 || csv.length)
+          throw new Error(
+            "여러 내보내기 파일이 섞여 있어요. 원본 파일 하나를 선택해 주세요.",
+          );
+        const entry = xml[0];
+        if (entry.encrypted)
+          throw new Error("암호로 잠긴 파일은 읽을 수 없어요.");
+        archive.source = "apple";
+        const result = await archive.readApple(
+          entry.uncompressedSize,
+          (sink) =>
+            entry.getData(sink, {
+              signal,
+              checkSignature: true,
+              useWebWorkers: false,
+            }),
+          progress,
+          signal,
+        );
+        return { archive, ...result };
+      }
       if (csv.length !== 1)
         throw new Error(
           csv.length
             ? "여러 내보내기 파일이 섞여 있어요. 삼성헬스에서 다운로드한 ZIP 하나를 선택해 주세요."
-            : "삼성헬스 운동 기록을 찾지 못했어요. 삼성헬스에서 다운로드한 원본 ZIP을 선택해 주세요.",
+            : "지원하는 운동 기록을 찾지 못했어요. 삼성헬스 ZIP 또는 애플 건강 export.xml이 들어 있는 ZIP을 선택해 주세요.",
         );
       progress("러닝 기록을 읽고 있어요", 10);
       const result = parseExerciseCsv(
@@ -111,6 +151,42 @@ export class Archive {
       await archive.close();
       throw error;
     }
+  }
+  private async readApple(
+    size: number,
+    consume: (sink: WritableStream<Uint8Array>) => Promise<unknown>,
+    progress: (phase: string, percent: number) => void,
+    signal?: AbortSignal,
+  ) {
+    if (size > APPLE_LIMITS.xml)
+      throw new Error(
+        "애플 건강 XML은 압축을 푼 크기 1 GB까지 읽을 수 있어요. 크기 제한을 넘었어요.",
+      );
+    const parser = new AppleHealthParser();
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    let bytes = 0,
+      lastPercent = -1;
+    await consume(
+      new WritableStream<Uint8Array>({
+        write(chunk) {
+          if (signal?.aborted) throw new Error("분석을 취소했어요.");
+          bytes += chunk.byteLength;
+          if (bytes > APPLE_LIMITS.xml)
+            throw new Error("애플 건강 XML의 크기 제한을 넘었어요.");
+          parser.write(decoder.decode(chunk, { stream: true }));
+          const percent = Math.min(
+            90,
+            Math.floor((bytes / Math.max(size, 1)) * 90),
+          );
+          if (percent !== lastPercent) {
+            progress("애플 건강에서 러닝 요약을 읽고 있어요", percent);
+            lastPercent = percent;
+          }
+        },
+      }),
+    );
+    parser.write(decoder.decode());
+    return parser.finish();
   }
   private async read(
     entry: Entry,
@@ -158,6 +234,7 @@ export class Archive {
     summary: InternalSummary,
     signal?: AbortSignal,
   ): Promise<Detail> {
+    if (this.source === "apple") throw new Error(APPLE_DETAIL_NOTICE);
     const cached = this.cache.get(summary.id);
     if (cached) {
       this.cache.delete(summary.id);

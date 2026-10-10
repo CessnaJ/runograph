@@ -19,7 +19,7 @@ test("review, explicit comparison, consent-only storage, reload and removal", as
   await page.goto("/");
   const buffer = await testZip(16, false, "growth");
   const importZip = async () =>
-    page.getByLabel("삼성헬스 ZIP 불러오기", { exact: true }).setInputFiles({
+    page.getByLabel("러닝 파일 불러오기", { exact: true }).setInputFiles({
       name: "synthetic-review.zip",
       mimeType: "application/zip",
       buffer,
@@ -30,7 +30,7 @@ test("review, explicit comparison, consent-only storage, reload and removal", as
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "삼성헬스 ZIP 불러오기", exact: true }),
+    page.getByRole("button", { name: "러닝 파일 불러오기", exact: true }),
   ).toBeVisible();
   await importZip();
   await page.getByRole("button", { name: "비교할 러닝 고르기 →" }).click();
@@ -72,13 +72,11 @@ test("review, explicit comparison, consent-only storage, reload and removal", as
   await expect(
     page.getByRole("heading", { name: "이 기기에 보관 중이에요" }),
   ).toBeVisible();
-  await page
-    .getByLabel("삼성헬스 ZIP 불러오기", { exact: true })
-    .setInputFiles({
-      name: "broken.zip",
-      mimeType: "application/zip",
-      buffer: Buffer.from("invalid archive"),
-    });
+  await page.getByLabel("러닝 파일 불러오기", { exact: true }).setInputFiles({
+    name: "broken.zip",
+    mimeType: "application/zip",
+    buffer: Buffer.from("invalid archive"),
+  });
   await expect(page.getByRole("alert")).toBeVisible();
   await page.reload();
   await expect(
@@ -115,11 +113,11 @@ test("review, explicit comparison, consent-only storage, reload and removal", as
     .getByRole("button", { name: "기기에서 지우고 닫기", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "삼성헬스 ZIP 불러오기", exact: true }),
+    page.getByRole("button", { name: "러닝 파일 불러오기", exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "삼성헬스 ZIP 불러오기", exact: true }),
+    page.getByRole("button", { name: "러닝 파일 불러오기", exact: true }),
   ).toBeVisible();
   const storedCount = await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {

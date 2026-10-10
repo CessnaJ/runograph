@@ -1,4 +1,9 @@
-import { deviceLabel } from "./core/copy";
+import {
+  APPLE_DETAIL_NOTICE,
+  APPLE_NOTICE,
+  deviceLabel,
+  sourceLabel,
+} from "./core/copy";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -71,14 +76,16 @@ function downloadReport(
   const profiles = data.profiles.filter((p) => ids.has(p.id));
   const report = {
     app: "runograph",
+    source: data.source ?? "samsung",
     calculationVersion: ANALYSIS_VERSION,
     inputRevision: data.revision ?? 0,
     generatedAt: new Date().toISOString(),
     scope: "선택한 기간",
     basis: {
-      distance: "CSV 요약",
-      duration: "CSV 운동시간",
+      distance: "원본 운동 요약",
+      duration: "원본 운동시간",
       meanHeartRate: "상세 관측 구간 시간가중",
+      sessionMeanHeartRate: "원본 운동 요약의 평균 심박",
       pace: "유효 운동시간 / 동일 기록의 거리",
     },
     aggregate: aggregate(sessions, profiles),
@@ -136,6 +143,7 @@ function downloadReport(
       growthExcluded: s.growthExcluded ?? false,
     })),
     limitations: [
+      ...(data.source === "apple" ? [APPLE_NOTICE, APPLE_DETAIL_NOTICE] : []),
       "결측과 긴 공백은 보간하지 않음",
       "기기·날씨·경사 등 조건을 통제하지 않음",
       "의료 진단 또는 운동 처방이 아님",
@@ -219,6 +227,7 @@ export default function App() {
       .then((saved) => {
         if (cancelled || sequence.current !== version || !saved) return;
         setData(saved.data);
+        setGrowthView(saved.data.source === "apple" ? "habit" : "heart");
         setSavedGeneration(saved.generation);
         setTab("summary");
         location.hash = "summary";
@@ -228,7 +237,7 @@ export default function App() {
           setStorageError(
             error instanceof Error && error.message.includes("계산 버전")
               ? error.message
-              : "이 브라우저의 기기 보관을 읽을 수 없어요. ZIP은 계속 불러올 수 있어요.",
+              : "이 브라우저의 기기 보관을 읽을 수 없어요. 파일은 계속 불러올 수 있어요.",
           );
       })
       .finally(() => {
@@ -338,7 +347,7 @@ export default function App() {
   function importFile(file: File) {
     reset();
     setBusy(true);
-    setProgress({ phase: "ZIP 안의 파일을 확인하고 있어요", percent: 0 });
+    setProgress({ phase: "내보내기 파일을 확인하고 있어요", percent: 0 });
     const requestId = ++sequence.current;
     current.current.import = requestId;
     const next = new Worker(
@@ -355,6 +364,7 @@ export default function App() {
         msg.requestId === current.current.import
       ) {
         setData(msg.data);
+        setGrowthView(msg.data.source === "apple" ? "habit" : "heart");
         setBusy(false);
         setTab("summary");
         location.hash = "summary";
@@ -440,7 +450,7 @@ export default function App() {
         void discardGeneration(savingGeneration.current).catch(() => {});
       savingGeneration.current = null;
       setError(
-        "기록을 읽는 도중 멈췄어요. 기기의 메모리가 부족할 수 있어요. 다른 탭을 닫고 ZIP 파일을 다시 선택해 주세요.",
+        "기록을 읽는 도중 멈췄어요. 기기의 메모리가 부족할 수 있어요. 다른 탭을 닫고 파일을 다시 선택해 주세요.",
       );
       next.terminate();
       worker.current = null;
@@ -459,6 +469,12 @@ export default function App() {
     setDetailLoading(true);
     const requestId = ++sequence.current;
     current.current.detail = requestId;
+    if (data?.sessions.find((s) => s.id === id)?.source === "apple") {
+      setDetailLoading(false);
+      setDetailError(APPLE_DETAIL_NOTICE);
+      window.scrollTo({ top: 0, behavior: "instant" });
+      return;
+    }
     if (worker.current)
       worker.current.postMessage({ type: "DETAIL", requestId, id });
     else if (savedGeneration)
@@ -528,6 +544,14 @@ export default function App() {
     const requestId = ++sequence.current;
     current.current.pair = requestId;
     if (!ids[0] || !ids[1]) {
+      setPairLoading(false);
+      return;
+    }
+    if (
+      ids.some(
+        (id) => data?.sessions.find((s) => s.id === id)?.source === "apple",
+      )
+    ) {
       setPairLoading(false);
       return;
     }
@@ -632,7 +656,8 @@ export default function App() {
         >
           <h2>기기에 보관한 러닝을 지울까요?</h2>
           <p>
-            보관한 기록과 현재 화면을 지워요. 다시 보려면 원본 ZIP이 필요해요.
+            보관한 기록과 현재 화면을 지워요. 다시 보려면 원본 내보내기 파일이
+            필요해요.
           </p>
           <div className="pair-actions">
             <Button disabled={deleting} onClick={() => void forgetSaved()}>
@@ -651,8 +676,8 @@ export default function App() {
       <input
         ref={input}
         type="file"
-        accept=".zip,application/zip,application/x-zip-compressed"
-        aria-label="삼성헬스 ZIP 불러오기"
+        accept=".zip,.xml,application/zip,application/x-zip-compressed,application/xml,text/xml"
+        aria-label="러닝 파일 불러오기"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -665,7 +690,7 @@ export default function App() {
             <Leaf size={16} />
             <span>기록을 서버로 보내지 않아요</span>
           </div>
-          <p className="eyebrow">삼성헬스 러닝 기록</p>
+          <p className="eyebrow">삼성헬스 · 애플 건강 러닝 기록</p>
           <h1>
             뛰고 난 뒤,
             <br />
@@ -696,13 +721,17 @@ export default function App() {
                 onClick={() => input.current?.click()}
               >
                 <FileArchive size={18} />
-                삼성헬스 ZIP 불러오기
+                러닝 파일 불러오기
                 <ArrowUpRight size={18} />
               </Button>
               <p className="fine">
                 선택한 파일은 이 기기에서만 읽어요.
                 <br />
                 불러온 뒤 이 기기에 보관할 수 있어요.
+              </p>
+              <p className="fine">
+                애플 건강은 시험 지원 · 러닝 요약만 표시해요. 실제 내보내기 파일
+                검증 전이에요.
               </p>
             </>
           )}
@@ -736,14 +765,19 @@ export default function App() {
             </span>
           </div>
           <details className="import-help">
-            <summary>ZIP은 어디에서 받나요?</summary>
+            <summary>내보내기 파일은 어디에서 받나요?</summary>
             <p>
               삼성헬스의 설정에서 ‘개인 데이터 다운로드’를 찾아보세요.
               다운로드한 ZIP 파일을 그대로 선택하면 돼요. 메뉴 이름은 앱 버전에
               따라 달라질 수 있어요.
             </p>
             <p>
-              압축을 풀지 않아도 돼요. 512 MB 이하의 ZIP 파일을 읽을 수 있어요.
+              애플 건강: iPhone 건강 앱 → 요약 → 프로필 사진 → ‘모든 건강 데이터
+              내보내기’. 내려받은 ZIP이나 압축 안의 export.xml을 선택하세요.
+              애플 건강은 현재 러닝 요약만 지원해요.
+            </p>
+            <p>
+              ZIP은 512 MB, 애플 XML은 압축을 푼 크기 1 GB까지 읽을 수 있어요.
               기기에 보관하지 않은 기록은 새로고침하면 다시 선택해야 해요.
             </p>
           </details>
@@ -756,12 +790,12 @@ export default function App() {
             </p>
             <p>
               지원 여부는 브라우저마다 달라요. 앱을 다시 열려면 인터넷 연결과
-              보관하지 않은 기록은 ZIP 파일도 필요해요.
+              보관하지 않은 기록은 내보내기 파일도 필요해요.
             </p>
           </details>
           <p className="fine">
-            GPS·사진·프로필은 읽지 않아요. 사용 기록이나 오류도 외부로 보내지
-            않아요.
+            러닝에 필요한 항목만 사용하고 GPS·사진·프로필은 보관하지 않아요.
+            사용 기록이나 오류도 외부로 보내지 않아요.
           </p>
           <details className="import-help">
             <summary>기기 보관 관리</summary>
@@ -843,6 +877,11 @@ export default function App() {
                 </div>
               </details>
             )}
+            {data.source === "apple" && (
+              <p className="empty-note" role="note">
+                {APPLE_NOTICE}
+              </p>
+            )}
             {data.warnings.length > 0 && !(tab === "runs" && selected) && (
               <details className="quality-warnings">
                 <summary>기록 확인 안내 {data.warnings.length}건</summary>
@@ -867,7 +906,9 @@ export default function App() {
                     onCompare={startComparison}
                     onGrowth={() => {
                       setGrowthConfig(null);
-                      setGrowthView("heart");
+                      setGrowthView(
+                        data.source === "apple" ? "habit" : "heart",
+                      );
                       changeTab("growth");
                       window.scrollTo({ top: 0, behavior: "instant" });
                     }}
@@ -948,12 +989,18 @@ export default function App() {
                         </span>
                       </div>
                       <p className="fine">
-                        삼성헬스에 저장된 요약 ·{" "}
+                        {sourceLabel(selected.source)}에 저장된 요약 ·{" "}
                         {deviceLabel(selected.deviceGroup)}
                         {selected.offsetMs === null
                           ? " · 시간대 정보가 없어 UTC 날짜로 표시"
                           : ""}
                       </p>
+                      {selected.source === "apple" && (
+                        <p className="fine">
+                          요약 평균 심박 {num(selected.meanHr)} bpm · 최대 심박{" "}
+                          {num(selected.maxHr)} bpm
+                        </p>
+                      )}
                     </div>
                     {detailLoading ? (
                       <div className="loading-chart" role="status">
@@ -982,7 +1029,8 @@ export default function App() {
                       <details>
                         <summary>원본·분석 설정</summary>
                         <p className="fine">
-                          삼성헬스 원본: {duration(selected.durationMs)} ·{" "}
+                          {sourceLabel(selected.source)} 원본:{" "}
+                          {duration(selected.durationMs)} ·{" "}
                           {num(
                             selected.distanceM === null
                               ? null
@@ -1024,7 +1072,9 @@ export default function App() {
                           총 거리·운동시간 계산에서 제외
                         </label>
                         {selected.quality?.some(
-                          (q) => q.code === "short-record",
+                          (q) =>
+                            q.code === "short-record" ||
+                            q.code === "apple-overlap",
                         ) && (
                           <label className="check-setting">
                             <input
@@ -1038,7 +1088,9 @@ export default function App() {
                                 })
                               }
                             />
-                            분할 기록으로 합계에 포함
+                            {selected.source === "apple"
+                              ? "중복이 아닌 기록으로 확인하고 합계에 포함"
+                              : "분할 기록으로 합계에 포함"}
                           </label>
                         )}
                         <label className="check-setting">
@@ -1102,13 +1154,15 @@ export default function App() {
                             <small>
                               {duration(s.durationMs)} · 심박 {num(s.meanHr)}{" "}
                               bpm ·{" "}
-                              {s.status === "ready"
-                                ? "시간별 측정값 있음"
-                                : s.status === "missing"
-                                  ? "시간별 측정값 없음"
-                                  : s.status === "limited"
-                                    ? "일부 분석만 완료"
-                                    : "측정값을 읽지 못함"}
+                              {s.source === "apple"
+                                ? "요약만 지원"
+                                : s.status === "ready"
+                                  ? "시간별 측정값 있음"
+                                  : s.status === "missing"
+                                    ? "시간별 측정값 없음"
+                                    : s.status === "limited"
+                                      ? "일부 분석만 완료"
+                                      : "측정값을 읽지 못함"}
                               {!usesSummary(s, "pace")
                                 ? " · 시간·거리 확인 필요"
                                 : ""}
@@ -1148,7 +1202,7 @@ export default function App() {
                 </h2>
                 <p className="fine">
                   러닝 날짜·운동량·심박·시간별 측정값을 이 브라우저에 보관해요.
-                  원본 ZIP·GPS·사진·프로필은 보관하지 않아요. 공용 기기에서는
+                  원본 파일·GPS·사진·프로필은 보관하지 않아요. 공용 기기에서는
                   보관하지 마세요.
                 </p>
                 {savedGeneration ? (
@@ -1166,7 +1220,7 @@ export default function App() {
                     </Button>
                     <p className="fine">
                       선택하면 이전에 보관한 러닝을 현재 기록으로 바꿔요. 새
-                      ZIP의 자동 병합은 하지 않아요.
+                      내보내기 파일의 자동 병합은 하지 않아요.
                     </p>
                   </>
                 )}
@@ -1185,7 +1239,7 @@ export default function App() {
                   분석 결과 저장
                 </Button>
                 <Button variant="ghost" onClick={() => input.current?.click()}>
-                  다른 ZIP 선택
+                  다른 파일 선택
                 </Button>
               </div>
               {reportOpen && (
@@ -1213,7 +1267,7 @@ export default function App() {
               <p>
                 {savedGeneration
                   ? "보관한 기록은 이 브라우저에서 다시 볼 수 있어요. 사이트 데이터를 지우면 보관도 사라져요."
-                  : "기기에 보관하지 않으면 새로고침할 때 ZIP이 다시 필요해요."}
+                  : "기기에 보관하지 않으면 새로고침할 때 파일이 다시 필요해요."}
                 <br />
                 기록의 변화를 보여드려요. 건강 상태를 진단하거나 운동을
                 처방하지는 않아요.

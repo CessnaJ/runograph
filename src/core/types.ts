@@ -1,5 +1,6 @@
 export interface Summary {
   id: string;
+  source?: "samsung" | "apple";
   startMs: number;
   endMs: number | null;
   offsetMs: number | null;
@@ -111,6 +112,7 @@ export interface Profile extends Weighted {
   } | null;
 }
 export interface Dataset {
+  source?: "samsung" | "apple";
   sessions: Summary[];
   profiles: Profile[];
   warnings: string[];
