@@ -59,8 +59,8 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
       ? "이 조건에서는 비교할 기록이 부족해요."
       : result.state === "conditions"
         ? "조건이 달라 직접 비교하기 어려워요."
-        : result.state === "sensitive"
-          ? "설정에 따라 결과가 달라져요."
+        : result.state === "sensitive" && result.sensitivity?.directionChanged
+          ? "설정에 따라 차이의 방향이 뒤바뀌어요."
           : diff === null
             ? "비교에 쓸 측정값이 없어요."
             : displayDiff === 0
@@ -107,6 +107,13 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
         <p className="fine">{result.reason[0]}</p>
       )}
       <p className="fine">날씨와 코스 차이는 반영하지 않았어요.</p>
+      {result.state === "sensitive" &&
+        !result.sensitivity?.directionChanged && (
+          <p className="fine">
+            확인한 설정에서 차이의 방향은 같았어요. 다만 비교 조건의 충족 여부가
+            달라 참고로 봐주세요.
+          </p>
+        )}
       <details className="comparison-notes">
         <summary>비교 조건·확인 사항</summary>
         {result.reason.map((r) => (

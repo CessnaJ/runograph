@@ -339,7 +339,13 @@ export interface Comparison {
   difference: number | null;
   range: [number, number] | null;
   periods: { previous: [string, string]; recent: [string, string] };
-  sensitivity: { min: number; max: number; variants: number } | null;
+  sensitivity: {
+    min: number;
+    max: number;
+    variants: number;
+    directionChanged: boolean;
+    conditionsChanged: boolean;
+  } | null;
   candidates: number;
   excluded: { id: string; date: string; reason: string }[];
   analysisVersion: string;
@@ -659,6 +665,12 @@ export function compare(
         min: Math.min(difference, ...diffs),
         max: Math.max(difference, ...diffs),
         variants: variants.length,
+        directionChanged: variants.some(
+          (v) =>
+            v.difference !== null &&
+            Math.sign(v.difference) !== Math.sign(difference),
+        ),
+        conditionsChanged: variants.some((v) => v.state !== baseState),
       };
       if (
         variants.some(
@@ -670,7 +682,9 @@ export function compare(
       ) {
         state = "sensitive";
         reason.push(
-          "비교 범위를 바꾸거나 러닝 하나를 빼면 차이의 방향이나 비교 가능 여부가 달라져요.",
+          sensitivityRange.directionChanged
+            ? "비교 범위를 바꾸거나 러닝 하나를 빼면 차이의 방향이 뒤바뀌어요."
+            : "확인한 설정에서는 차이의 방향이 같았지만, 비교 조건의 충족 여부가 달라졌어요.",
         );
       }
     }

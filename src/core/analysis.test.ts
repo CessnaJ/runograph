@@ -76,6 +76,31 @@ function dataset() {
   return { sessions, profiles, config };
 }
 describe("v0.2 interval and quality contracts", () => {
+  it("distinguishes changed support from a reversed comparison direction", () => {
+    const { sessions, profiles, config } = dataset();
+    const selected = sessions.filter((s) => Number(s.id.split("-")[1]) < 5);
+    const result = compare(selected, profiles, config);
+    expect(result.state).toBe("sensitive");
+    expect(result.sensitivity).toMatchObject({
+      directionChanged: false,
+      conditionsChanged: true,
+    });
+    expect(result.sensitivity?.min).toBeCloseTo(-5);
+    expect(result.sensitivity?.max).toBeCloseTo(-5);
+    expect(result.reason.join(" ")).not.toContain("방향이 뒤바뀌어요");
+  });
+  it("reports a direction change when removing one run reverses the observation", () => {
+    const { sessions, profiles, config } = dataset();
+    profiles
+      .find((p) => p.id === "1-0")!
+      .windows!.forEach((w) => {
+        w.hr = 200;
+      });
+    const result = compare(sessions, profiles, config);
+    expect(result.state).toBe("sensitive");
+    expect(result.sensitivity?.directionChanged).toBe(true);
+    expect(result.reason.join(" ")).toContain("방향이 뒤바뀌어요");
+  });
   it("clips intervals at arbitrary selection boundaries and includes leading missing time in coverage", () => {
     const d = detail();
     d.points[0].hr = 100;

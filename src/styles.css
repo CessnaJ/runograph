@@ -1442,3 +1442,144 @@ select {
   margin-top: 4px;
   font-size: 14px;
 }
+
+/* A run review is the primary task; technical analysis stays secondary. */
+.run-recap {
+  padding: 8px 0 14px;
+}
+.recap-stats {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  gap: 12px;
+  padding: 8px 0 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.recap-stats strong {
+  display: block;
+  font-size: clamp(22px, 5vw, 34px);
+  font-weight: 500;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.recap-stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.recap-context {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 24px 0 8px;
+}
+.run-recap h2,
+.pair-answer h2 {
+  font-size: clamp(20px, 4vw, 27px);
+  line-height: 1.6;
+  font-weight: 500;
+  letter-spacing: -0.6px;
+}
+.half-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 13px;
+  margin: 18px 0 10px;
+}
+.run-recap .fine {
+  margin: 10px 0 18px;
+}
+.compare-entry p,
+.habit-recap p {
+  margin: 12px 0 18px;
+}
+.analysis-entry {
+  margin-top: 20px;
+}
+.pair-selectors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.pair-selectors label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+.pair-selectors select {
+  width: 100%;
+  min-width: 0;
+  font-size: 14px;
+}
+.pair-answer {
+  margin: 26px 0 22px;
+}
+.pair-answer p {
+  margin-top: 12px;
+}
+.pair-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pair-table th,
+.pair-table td {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--rule);
+  text-align: right;
+  font-weight: 400;
+}
+.pair-table th:first-child {
+  text-align: left;
+  width: 24%;
+}
+.pair-table thead {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pair-current {
+  color: var(--heart);
+}
+.pair-previous {
+  color: var(--muted);
+}
+.pair-chart {
+  margin: 26px 0 12px;
+}
+.pair-chart h3 {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.pair-chart small {
+  font-weight: 400;
+  color: var(--muted);
+}
+.pair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.storage-panel {
+  background: var(--wash);
+  padding: 20px;
+  border-radius: 8px;
+  margin: 0 0 24px;
+}
+.storage-panel h2 {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.storage-panel p {
+  margin: 10px 0 14px;
+}
+@media (max-width: 600px) {
+  .pair-selectors {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

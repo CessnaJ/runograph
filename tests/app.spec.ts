@@ -88,7 +88,7 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
     () => document.documentElement.scrollWidth > innerWidth,
   );
   expect(overflow).toBe(false);
-  await page.getByRole("button", { name: "성장", exact: true }).click();
+  await page.getByRole("button", { name: "분석", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "성장과 변화", exact: true }),
   ).toBeVisible();
@@ -256,7 +256,7 @@ test("v0.2 comparison evidence, question changes, exclusions and return preserve
   await expect(
     page.getByRole("navigation", { name: "주요 화면" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "성장", exact: true }).click();
+  await page.getByRole("button", { name: "분석", exact: true }).click();
   await expect(page.getByTestId("comparison-answer")).toHaveAttribute(
     "data-state",
     "ready",

@@ -118,9 +118,14 @@ export interface Dataset {
 }
 export type WorkerRequest =
   | { type: "IMPORT"; requestId: number; file: File }
+  | { type: "PAIR"; requestId: number; ids: [string, string] }
+  | { type: "SAVE"; requestId: number; generation: string }
   | { type: "DETAIL"; requestId: number; id: string };
 export type WorkerResponse =
   | { type: "PROGRESS"; requestId: number; phase: string; percent: number }
   | { type: "DATA"; requestId: number; data: Dataset }
   | { type: "DETAIL"; requestId: number; detail: Detail }
+  | { type: "PAIR"; requestId: number; details: [Detail, Detail] }
+  | { type: "SAVE_PROGRESS"; requestId: number; count: number; total: number }
+  | { type: "SAVED"; requestId: number; generation: string }
   | { type: "ERROR"; requestId: number; message: string };

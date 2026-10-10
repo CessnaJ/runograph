@@ -2,8 +2,10 @@
 import { Archive, LIMITS } from "../core/archive";
 import { profile } from "../core/metrics";
 import { qualityIssues } from "../core/quality";
+import { saveDetail, discardGeneration } from "../core/storage";
 import type {
   InternalSummary,
+  Detail,
   Profile,
   Summary,
   WorkerRequest,
@@ -85,6 +87,52 @@ async function handle(msg: WorkerRequest) {
         requestId: msg.requestId,
         data: { sessions, profiles, warnings, revision: msg.requestId },
       });
+    } else if (msg.type === "SAVE") {
+      if (!archive) throw new Error("ZIP을 다시 선택해 주세요.");
+      try {
+        let points = 0;
+        for (let i = 0; i < summaries.length; i++) {
+          const summary = summaries[i];
+          if (summary.status === "ready" || summary.status === "limited") {
+            archive.newReadBudget();
+            const detail = await archive.detail(summary);
+            points += detail.points.length;
+            if (points > LIMITS.profileSamples + 100000)
+              throw new Error(
+                "기록이 많아 이 기기에 보관하지 못했어요. ZIP으로 계속 볼 수 있어요.",
+              );
+            await saveDetail(msg.generation, detail);
+          }
+          send({
+            type: "SAVE_PROGRESS",
+            requestId: msg.requestId,
+            count: i + 1,
+            total: summaries.length,
+          });
+        }
+        send({
+          type: "SAVED",
+          requestId: msg.requestId,
+          generation: msg.generation,
+        });
+      } catch (error) {
+        await discardGeneration(msg.generation).catch(() => {});
+        throw error;
+      }
+    } else if (msg.type === "PAIR") {
+      if (!archive) throw new Error("ZIP을 다시 선택해 주세요.");
+      const details: Detail[] = [];
+      for (const id of msg.ids) {
+        const summary = summaries.find((s) => s.id === id);
+        if (!summary) throw new Error("이 러닝을 찾지 못했어요.");
+        archive.newReadBudget();
+        details.push(await archive.detail(summary));
+      }
+      send({
+        type: "PAIR",
+        requestId: msg.requestId,
+        details: details as [Detail, Detail],
+      });
     } else {
       const summary = summaries.find((s) => s.id === msg.id);
       if (!archive || !summary) throw new Error("ZIP을 다시 선택해 주세요.");
@@ -108,17 +156,18 @@ async function handle(msg: WorkerRequest) {
 }
 
 // Serialize archive reads and retain only the newest queued detail request.
-let pending: WorkerRequest | null = null;
+let pending: WorkerRequest[] = [];
 let running = false;
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
-  pending = event.data;
+  if (event.data.type === "DETAIL" || event.data.type === "PAIR")
+    pending = pending.filter((p) => p.type !== event.data.type);
+  pending.push(event.data);
   if (!running) void drain();
 };
 async function drain() {
   running = true;
-  while (pending) {
-    const msg = pending;
-    pending = null;
+  while (pending.length) {
+    const msg = pending.shift()!;
     await handle(msg);
   }
   running = false;

@@ -21,6 +21,14 @@ import {
   type CompareConfig,
 } from "./core/analysis";
 import { summaryPace, usesSummary } from "./core/quality";
+import {
+  clearSavedRuns,
+  commitSavedRuns,
+  discardGeneration,
+  loadSavedDetail,
+  loadSavedRuns,
+  updateSavedData,
+} from "./core/storage";
 import type { GrowthView } from "./components/Growth";
 import type {
   Dataset,
@@ -38,13 +46,20 @@ const Growth = lazy(() =>
 const RunChart = lazy(() =>
   import("./components/RunChart").then((m) => ({ default: m.RunChart })),
 );
-type Tab = "summary" | "runs" | "growth";
+const RunComparison = lazy(() =>
+  import("./components/RunComparison").then((m) => ({
+    default: m.RunComparison,
+  })),
+);
+type Tab = "summary" | "runs" | "growth" | "compare";
 function initialTab(): Tab {
   return location.hash === "#runs"
     ? "runs"
-    : location.hash === "#growth"
-      ? "growth"
-      : "summary";
+    : location.hash === "#compare"
+      ? "compare"
+      : location.hash === "#growth"
+        ? "growth"
+        : "summary";
 }
 function downloadReport(
   data: Dataset,
@@ -159,12 +174,36 @@ export default function App() {
     [focus, setFocus] = useState<EvidenceRef | undefined>(),
     [qualityFilter, setQualityFilter] = useState("all"),
     [order, setOrder] = useState("latest"),
+    [pairIds, setPairIds] = useState<[string, string]>(["", ""]),
+    [pairDetails, setPairDetails] = useState<[Detail, Detail] | null>(null),
+    [pairLoading, setPairLoading] = useState(false),
+    [pairError, setPairError] = useState(""),
+    [savedGeneration, setSavedGeneration] = useState<string | null>(null),
+    [saving, setSaving] = useState(false),
+    [saveProgress, setSaveProgress] = useState(""),
+    [storageError, setStorageError] = useState(""),
+    [forgetOpen, setForgetOpen] = useState(false),
+    [deleting, setDeleting] = useState(false),
+    [restoring, setRestoring] = useState(true),
     [theme, setTheme] = useState(
       () =>
         localStorage.getItem("runograph-theme") ??
         (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
     );
   const reportUrls = useRef(new Set<string>());
+  const forgetPanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (forgetOpen) {
+      forgetPanel.current?.focus();
+      forgetPanel.current?.scrollIntoView({
+        block: "start",
+        behavior: "instant",
+      });
+    }
+  }, [forgetOpen]);
+  const savingGeneration = useRef<string | null>(null);
+  const latestData = useRef(data);
+  latestData.current = data;
   const returnTo = useRef<{ tab: Tab; scroll: number }>({
     tab: "runs",
     scroll: 0,
@@ -172,7 +211,39 @@ export default function App() {
   const worker = useRef<Worker | null>(null),
     sequence = useRef(0),
     input = useRef<HTMLInputElement>(null),
-    current = useRef({ import: 0, detail: 0 });
+    current = useRef({ import: 0, detail: 0, pair: 0, save: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    const version = sequence.current;
+    loadSavedRuns()
+      .then((saved) => {
+        if (cancelled || sequence.current !== version || !saved) return;
+        setData(saved.data);
+        setSavedGeneration(saved.generation);
+        setTab("summary");
+        location.hash = "summary";
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setStorageError(
+            error instanceof Error && error.message.includes("계산 버전")
+              ? error.message
+              : "이 브라우저의 기기 보관을 읽을 수 없어요. ZIP은 계속 불러올 수 있어요.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (savedGeneration && data)
+      void updateSavedData(savedGeneration, data).catch(() =>
+        setStorageError("변경한 분석 설정을 기기에 저장하지 못했어요."),
+      );
+  }, [data, savedGeneration]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("runograph-theme", theme);
@@ -188,6 +259,8 @@ export default function App() {
   useEffect(
     () => () => {
       worker.current?.terminate();
+      if (savingGeneration.current)
+        void discardGeneration(savingGeneration.current).catch(() => {});
       for (const url of reportUrls.current) URL.revokeObjectURL(url);
       reportUrls.current.clear();
     },
@@ -232,7 +305,18 @@ export default function App() {
     worker.current?.terminate();
     worker.current = null;
     sequence.current++;
-    current.current = { import: 0, detail: 0 };
+    current.current = { import: 0, detail: 0, pair: 0, save: 0 };
+    if (savingGeneration.current)
+      void discardGeneration(savingGeneration.current).catch(() => {});
+    savingGeneration.current = null;
+    setSaving(false);
+    setSavedGeneration(null);
+    setPairIds(["", ""]);
+    setPairDetails(null);
+    setPairLoading(false);
+    setPairError("");
+    setStorageError("");
+    setForgetOpen(false);
     setData(null);
     setBusy(false);
     setError("");
@@ -275,6 +359,53 @@ export default function App() {
         setTab("summary");
         location.hash = "summary";
       } else if (
+        msg.type === "PAIR" &&
+        msg.requestId === current.current.pair
+      ) {
+        setPairDetails(msg.details);
+        setPairLoading(false);
+      } else if (
+        msg.type === "SAVE_PROGRESS" &&
+        msg.requestId === current.current.save
+      ) {
+        setSaveProgress(`${msg.count} / ${msg.total}회 보관 중`);
+      } else if (
+        msg.type === "SAVED" &&
+        msg.requestId === current.current.save
+      ) {
+        const snapshotData = latestData.current;
+        if (snapshotData)
+          void (async () => {
+            try {
+              const previous = await loadSavedRuns().catch(() => undefined);
+              if (msg.requestId !== current.current.save) return;
+              await commitSavedRuns({
+                formatVersion: 1,
+                analysisVersion: ANALYSIS_VERSION,
+                generation: msg.generation,
+                savedAt: new Date().toISOString(),
+                data: snapshotData,
+              });
+              if (msg.requestId !== current.current.save) {
+                await discardGeneration(msg.generation).catch(() => {});
+                return;
+              }
+              savingGeneration.current = null;
+              setSavedGeneration(msg.generation);
+              setSaving(false);
+              if (previous && previous.generation !== msg.generation)
+                await discardGeneration(previous.generation).catch(() => {});
+            } catch {
+              if (msg.requestId !== current.current.save) return;
+              setSaving(false);
+              setStorageError(
+                "기기 보관을 마치지 못했어요. 저장 공간과 브라우저 설정을 확인해 주세요.",
+              );
+              await discardGeneration(msg.generation).catch(() => {});
+              savingGeneration.current = null;
+            }
+          })();
+      } else if (
         msg.type === "DETAIL" &&
         msg.requestId === current.current.detail
       ) {
@@ -289,12 +420,25 @@ export default function App() {
         } else if (msg.requestId === current.current.detail) {
           setDetailError(msg.message);
           setDetailLoading(false);
+        } else if (msg.requestId === current.current.pair) {
+          setPairError(msg.message);
+          setPairLoading(false);
+        } else if (msg.requestId === current.current.save) {
+          setSaving(false);
+          setStorageError(msg.message);
+          savingGeneration.current = null;
         }
       }
     };
     next.onerror = () => {
+      if (worker.current !== next) return;
       setBusy(false);
       setDetailLoading(false);
+      setPairLoading(false);
+      setSaving(false);
+      if (savingGeneration.current)
+        void discardGeneration(savingGeneration.current).catch(() => {});
+      savingGeneration.current = null;
       setError(
         "기록을 읽는 도중 멈췄어요. 기기의 메모리가 부족할 수 있어요. 다른 탭을 닫고 ZIP 파일을 다시 선택해 주세요.",
       );
@@ -315,7 +459,32 @@ export default function App() {
     setDetailLoading(true);
     const requestId = ++sequence.current;
     current.current.detail = requestId;
-    worker.current?.postMessage({ type: "DETAIL", requestId, id });
+    if (worker.current)
+      worker.current.postMessage({ type: "DETAIL", requestId, id });
+    else if (savedGeneration)
+      void loadSavedDetail(savedGeneration, id)
+        .then((saved) => {
+          if (current.current.detail !== requestId) return;
+          setDetail(saved ?? null);
+          setDetailError(
+            saved
+              ? ""
+              : "이 기록의 시간별 측정값이 없어요. 원본 ZIP을 다시 선택해 주세요.",
+          );
+          setDetailLoading(false);
+        })
+        .catch(() => {
+          if (current.current.detail === requestId) {
+            setDetailError(
+              "보관한 측정값을 읽지 못했어요. ZIP을 다시 선택해 주세요.",
+            );
+            setDetailLoading(false);
+          }
+        });
+    else {
+      setDetailLoading(false);
+      setDetailError("측정값을 다시 읽으려면 ZIP을 선택해 주세요.");
+    }
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   function backFromRun() {
@@ -352,6 +521,73 @@ export default function App() {
     if (value === "runs" && selectedId === null) setDetail(null);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
+  function selectPair(ids: [string, string]) {
+    setPairIds(ids);
+    setPairDetails(null);
+    setPairError("");
+    const requestId = ++sequence.current;
+    current.current.pair = requestId;
+    if (!ids[0] || !ids[1]) {
+      setPairLoading(false);
+      return;
+    }
+    setPairLoading(true);
+    if (worker.current)
+      worker.current.postMessage({ type: "PAIR", requestId, ids });
+    else if (savedGeneration)
+      void Promise.all(ids.map((id) => loadSavedDetail(savedGeneration, id)))
+        .then((details) => {
+          if (current.current.pair !== requestId) return;
+          if (details[0] && details[1])
+            setPairDetails(details as [Detail, Detail]);
+          else
+            setPairError(
+              "선택한 기록의 시간별 측정값이 없어요. 원본 ZIP을 다시 선택해 주세요.",
+            );
+          setPairLoading(false);
+        })
+        .catch(() => {
+          if (current.current.pair === requestId) {
+            setPairError(
+              "보관한 측정값을 읽지 못했어요. ZIP을 다시 선택해 주세요.",
+            );
+            setPairLoading(false);
+          }
+        });
+    else {
+      setPairLoading(false);
+      setPairError("측정값을 다시 읽으려면 ZIP을 선택해 주세요.");
+    }
+  }
+  function startComparison(id: string) {
+    selectPair([id, ""]);
+    changeTab("compare");
+  }
+  function saveLocally() {
+    if (!worker.current || !data || saving) return;
+    const generation = crypto.randomUUID();
+    savingGeneration.current = generation;
+    setSaving(true);
+    setStorageError("");
+    setSaveProgress("러닝 기록을 기기에 보관하고 있어요…");
+    const requestId = ++sequence.current;
+    current.current.save = requestId;
+    worker.current.postMessage({ type: "SAVE", requestId, generation });
+  }
+  async function forgetSaved() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await clearSavedRuns();
+      reset();
+    } catch {
+      setStorageError(
+        "기기 보관을 지우지 못했어요. 브라우저의 사이트 데이터 설정에서 지울 수 있어요.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
   return (
     <div
       className={`app-shell ${tab === "runs" && selected ? "is-detail" : ""}`}
@@ -371,7 +607,7 @@ export default function App() {
               variant="ghost"
               className="icon-button"
               aria-label="불러온 기록 지우기"
-              onClick={reset}
+              onClick={() => (savedGeneration ? setForgetOpen(true) : reset())}
             >
               <RotateCcw size={18} />
             </Button>
@@ -386,6 +622,32 @@ export default function App() {
           </Button>
         </div>
       </header>
+      {forgetOpen && (
+        <section
+          className="storage-panel"
+          role="alertdialog"
+          aria-label="기기 보관 삭제 확인"
+          ref={forgetPanel}
+          tabIndex={-1}
+        >
+          <h2>기기에 보관한 러닝을 지울까요?</h2>
+          <p>
+            보관한 기록과 현재 화면을 지워요. 다시 보려면 원본 ZIP이 필요해요.
+          </p>
+          <div className="pair-actions">
+            <Button disabled={deleting} onClick={() => void forgetSaved()}>
+              {deleting ? "기기 보관을 지우고 있어요…" : "기기에서 지우고 닫기"}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => setForgetOpen(false)}
+            >
+              취소
+            </Button>
+          </div>
+        </section>
+      )}
       <input
         ref={input}
         type="file"
@@ -405,30 +667,15 @@ export default function App() {
           </div>
           <p className="eyebrow">삼성헬스 러닝 기록</p>
           <h1>
-            내 러닝의 변화를
+            뛰고 난 뒤,
             <br />
-            한눈에.
+            기록을 돌아보세요.
           </h1>
           <p className="intro-copy">
-            심박과 페이스를 함께 보고,
+            이번 러닝의 전후반을 살펴보고,
             <br />
-            지난 기록과 비교해 보세요.
+            지난 러닝을 골라 나란히 비교하세요.
           </p>
-          <div className="import-art" aria-hidden="true">
-            <svg viewBox="0 0 500 140" fill="none">
-              <path
-                d="M0 111 L25 110 L44 101 L67 105 L87 84 L110 95 L136 64 L153 70 L175 46 L190 75 L215 64 L236 32 L260 51 L280 28 L306 41 L328 19 L350 35 L374 18 L394 32 L415 19 L437 24 L460 10 L485 22 L500 17"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M0 125H500M0 75H500M0 25H500"
-                stroke="var(--rule)"
-                strokeDasharray="2 8"
-              />
-            </svg>
-            <span>기록을 불러오면 실제 그래프를 볼 수 있어요</span>
-          </div>
           {busy ? (
             <div className="import-progress" role="status">
               <div>
@@ -455,7 +702,7 @@ export default function App() {
               <p className="fine">
                 선택한 파일은 이 기기에서만 읽어요.
                 <br />
-                다시 열 때는 ZIP 파일을 다시 선택해 주세요.
+                불러온 뒤 이 기기에 보관할 수 있어요.
               </p>
             </>
           )}
@@ -463,6 +710,16 @@ export default function App() {
             <div className="error-message" role="alert">
               {error}
             </div>
+          )}
+          {restoring && (
+            <p role="status" className="fine">
+              기기에 보관한 러닝을 확인하고 있어요…
+            </p>
+          )}
+          {storageError && (
+            <p role="alert" className="fine">
+              {storageError}
+            </p>
           )}
           <div className="import-steps">
             <span>
@@ -487,7 +744,7 @@ export default function App() {
             </p>
             <p>
               압축을 풀지 않아도 돼요. 512 MB 이하의 ZIP 파일을 읽을 수 있어요.
-              새로고침하거나 앱을 다시 열면 파일을 다시 선택해야 해요.
+              기기에 보관하지 않은 기록은 새로고침하면 다시 선택해야 해요.
             </p>
           </details>
           <details className="import-help">
@@ -499,13 +756,23 @@ export default function App() {
             </p>
             <p>
               지원 여부는 브라우저마다 달라요. 앱을 다시 열려면 인터넷 연결과
-              ZIP 파일이 필요해요.
+              보관하지 않은 기록은 ZIP 파일도 필요해요.
             </p>
           </details>
           <p className="fine">
             GPS·사진·프로필은 읽지 않아요. 사용 기록이나 오류도 외부로 보내지
-            않아요. 위 그래프는 화면을 소개하는 예시예요.
+            않아요.
           </p>
+          <details className="import-help">
+            <summary>기기 보관 관리</summary>
+            <p>
+              이 브라우저에 보관한 기록과 중단된 보관 데이터를 모두 지울 수
+              있어요.
+            </p>
+            <Button variant="outline" onClick={() => setForgetOpen(true)}>
+              기기 보관 지우기
+            </Button>
+          </details>
         </main>
       ) : (
         <>
@@ -520,7 +787,7 @@ export default function App() {
                   ? "요약"
                   : value === "runs"
                     ? "러닝"
-                    : "성장"}
+                    : "분석"}
               </button>
             ))}
           </nav>
@@ -530,7 +797,7 @@ export default function App() {
                 {error}
               </p>
             )}
-            {!(tab === "runs" && selected) && (
+            {tab !== "compare" && !(tab === "runs" && selected) && (
               <details className="global-filters">
                 <summary>
                   {from || to || query ? "찾은 기록" : "전체 기록"} ·{" "}
@@ -596,10 +863,10 @@ export default function App() {
                   <Dashboard
                     sessions={sessions}
                     profiles={data.profiles}
-                    revision={data.revision ?? 0}
                     onOpen={openRun}
-                    onGrowth={(cfg) => {
-                      setGrowthConfig(cfg);
+                    onCompare={startComparison}
+                    onGrowth={() => {
+                      setGrowthConfig(null);
                       setGrowthView("heart");
                       changeTab("growth");
                       window.scrollTo({ top: 0, behavior: "instant" });
@@ -630,6 +897,18 @@ export default function App() {
                     이 조건에 맞는 러닝이 없어요. 기간이나 검색어를 바꿔보세요.
                   </p>
                 ))}
+              {tab === "compare" && (
+                <RunComparison
+                  sessions={data.sessions}
+                  ids={pairIds}
+                  details={pairDetails}
+                  loading={pairLoading}
+                  error={pairError}
+                  onSelect={selectPair}
+                  onOpen={openRun}
+                  onBack={() => changeTab("summary")}
+                />
+              )}
               {tab === "runs" &&
                 (selected ? (
                   <>
@@ -639,7 +918,8 @@ export default function App() {
                       onClick={backFromRun}
                     >
                       <ArrowLeft size={16} />
-                      {returnTo.current.tab === "growth"
+                      {returnTo.current.tab === "growth" ||
+                      returnTo.current.tab === "compare"
                         ? "비교로 돌아가기"
                         : returnTo.current.tab === "summary"
                           ? "요약으로 돌아가기"
@@ -693,6 +973,12 @@ export default function App() {
                       </div>
                     )}
                     <section className="quality-warnings">
+                      <Button
+                        variant="outline"
+                        onClick={() => startComparison(selected.id)}
+                      >
+                        이 러닝과 다른 기록 비교 →
+                      </Button>
                       <details>
                         <summary>원본·분석 설정</summary>
                         <p className="fine">
@@ -854,6 +1140,43 @@ export default function App() {
                 ))}
             </Suspense>
             <footer className="journal-footer">
+              <section className="storage-panel" aria-label="기기 보관">
+                <h2>
+                  {savedGeneration
+                    ? "이 기기에 보관 중이에요"
+                    : "다음에도 바로 열어보세요"}
+                </h2>
+                <p className="fine">
+                  러닝 날짜·운동량·심박·시간별 측정값을 이 브라우저에 보관해요.
+                  원본 ZIP·GPS·사진·프로필은 보관하지 않아요. 공용 기기에서는
+                  보관하지 마세요.
+                </p>
+                {savedGeneration ? (
+                  <Button variant="ghost" onClick={() => setForgetOpen(true)}>
+                    기기 보관 지우기
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled={saving || !worker.current}
+                      onClick={saveLocally}
+                    >
+                      {saving ? saveProgress : "이 기기에 러닝 보관"}
+                    </Button>
+                    <p className="fine">
+                      선택하면 이전에 보관한 러닝을 현재 기록으로 바꿔요. 새
+                      ZIP의 자동 병합은 하지 않아요.
+                    </p>
+                  </>
+                )}
+                {saving && (
+                  <p role="status" className="fine">
+                    보관이 끝나면 다음에 열 때 자동으로 불러와요.
+                  </p>
+                )}
+                {storageError && <p role="alert">{storageError}</p>}
+              </section>
               <div>
                 <Button
                   variant="outline"
@@ -888,7 +1211,9 @@ export default function App() {
                 </div>
               )}
               <p>
-                새로고침하면 ZIP 파일을 다시 선택해야 해요.
+                {savedGeneration
+                  ? "보관한 기록은 이 브라우저에서 다시 볼 수 있어요. 사이트 데이터를 지우면 보관도 사라져요."
+                  : "기기에 보관하지 않으면 새로고침할 때 ZIP이 다시 필요해요."}
                 <br />
                 기록의 변화를 보여드려요. 건강 상태를 진단하거나 운동을
                 처방하지는 않아요.
