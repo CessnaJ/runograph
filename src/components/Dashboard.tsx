@@ -1,6 +1,6 @@
 import { recap } from "../core/review";
 import { buildPastReference, suggestSimilarRuns } from "../core/runReview";
-import { APPLE_DETAIL_NOTICE } from "../core/copy";
+import { detailNotice, supportsDetail } from "../core/copy";
 import { useMemo } from "react";
 import {
   Bar,
@@ -165,13 +165,13 @@ export function Dashboard({
               </span>
             </div>
           </>
-        ) : latest.source === "apple" ? (
+        ) : !supportsDetail(latest) ? (
           <>
             <p className="recap-context">
               요약 평균 심박 {num(latest.meanHr)} bpm · 최대 심박{" "}
               {num(latest.maxHr)} bpm
             </p>
-            <p className="subtle">{APPLE_DETAIL_NOTICE}</p>
+            <p className="subtle">{detailNotice(latest)}</p>
           </>
         ) : (
           <>
@@ -183,7 +183,7 @@ export function Dashboard({
           </>
         )}
         {review &&
-          latest.source !== "apple" &&
+          supportsDetail(latest) &&
           review.bins.some((b) => b.pace !== null) && (
             <div
               className="review-mini-chart"
@@ -270,11 +270,11 @@ export function Dashboard({
             ? "마지막 구간 그래프 보기 →"
             : answer && halves
               ? "이 구간 그래프 보기 →"
-              : latest.source === "apple"
+              : !supportsDetail(latest)
                 ? "러닝 요약 보기 →"
                 : "러닝 그래프 보기 →"}
         </Button>
-        {review && latest.source !== "apple" && (
+        {review && supportsDetail(latest) && (
           <div className="review-evidence">
             <p className="review-coverage">
               심박 {num(review.hrCoverage * 100)}% · 속도{" "}

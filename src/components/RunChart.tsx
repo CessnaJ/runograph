@@ -49,6 +49,18 @@ const Plot = memo(function Plot({
   axis: Metric;
   trend: boolean;
 }) {
+  const measured = metrics.filter((key) =>
+    data.some((p) => p[key] !== null && p[key] !== undefined),
+  );
+  if (!measured.length)
+    return (
+      <div className="empty-plot" role="note">
+        이 구간에는 {metrics.map((key) => metricInfo[key].label).join("·")}{" "}
+        측정값이 없어요.
+      </div>
+    );
+  metrics = measured;
+  if (!metrics.includes(axis)) axis = metrics[0];
   return (
     <ResponsiveContainer width="100%" height="100%" debounce={30}>
       <LineChart
@@ -258,6 +270,9 @@ export function RunChart({
   const outside = points.filter((p) => p.time < from || p.time > to).length;
   const displayMetrics: Metric[] = hasHr ? ["hr", "pace"] : ["pace"];
   if (cadence) displayMetrics.push("cadence");
+  const measuredMetrics = displayMetrics.filter((key) =>
+    points.some((p) => p[key] !== null),
+  );
   const plots =
     layout === "split" ? displayMetrics.map((m) => [m]) : [displayMetrics];
   function selectTime(time: number, pin: boolean) {
@@ -575,10 +590,10 @@ export function RunChart({
             왼쪽 눈금{" "}
             <select
               aria-label="왼쪽 눈금"
-              value={displayMetrics.includes(axis) ? axis : displayMetrics[0]}
+              value={measuredMetrics.includes(axis) ? axis : measuredMetrics[0]}
               onChange={(e) => setAxis(e.target.value as Metric)}
             >
-              {displayMetrics.map((key) => (
+              {measuredMetrics.map((key) => (
                 <option key={key} value={key}>
                   {metricInfo[key].label}
                 </option>
@@ -586,7 +601,7 @@ export function RunChart({
             </select>
           </label>
           <div className="axis-ranges">
-            {displayMetrics.map((key) => (
+            {measuredMetrics.map((key) => (
               <span key={key} style={{ color: metricInfo[key].color }}>
                 {metricInfo[key].label}{" "}
                 {key === "pace"

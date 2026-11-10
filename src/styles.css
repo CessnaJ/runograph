@@ -225,6 +225,208 @@ input[type="date"] {
   margin-top: 14px;
   text-align: center;
 }
+.export-guides {
+  margin: 32px 0 20px;
+}
+.export-guides h2 {
+  font-size: 16px;
+}
+.export-guides-intro {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.export-phone-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.export-phone-choice {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  border: 1px solid var(--rule);
+  background: var(--page);
+  color: var(--ink);
+  border-radius: 8px;
+  font-size: 14px;
+}
+.export-phone-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--wash);
+  color: var(--accent);
+  font-weight: 600;
+}
+.export-apps {
+  margin-top: 16px;
+}
+.export-apps-label {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.export-app-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.export-app-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 5px;
+  row-gap: 5px;
+  min-height: 77px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--page);
+  color: var(--ink);
+  text-align: left;
+}
+.export-app-choice:last-child {
+  grid-column: 1 / -1;
+}
+.export-app-choice > span {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.export-app-choice > small {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.export-app-choice:hover,
+.export-phone-choice:hover {
+  background: var(--wash);
+}
+.export-guide-dialog {
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 0;
+  width: min(540px, calc(100% - 28px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: hidden;
+}
+.export-guide-dialog::backdrop {
+  background: rgb(10 20 12 / 55%);
+}
+.export-guide-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 34px);
+}
+.export-guide-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+.export-guide-heading > div {
+  min-width: 0;
+}
+.export-guide-heading h2 {
+  margin-top: 6px;
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+.export-guide-heading .icon-button {
+  flex-shrink: 0;
+  margin-top: -7px;
+  margin-right: -8px;
+}
+.export-guide-body {
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.export-guide-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+.export-guide-steps li {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.export-guide-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--wash);
+  font-size: 12px;
+  font-weight: 600;
+}
+.export-guide-steps p {
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.export-guide-file {
+  background: var(--wash);
+  border-radius: 8px;
+  padding: 13px 14px;
+  margin-top: 24px;
+  font-size: 12px;
+}
+.export-guide-file p {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.export-guide-note {
+  margin-top: 13px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.export-guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-size: 13px;
+  margin-top: 10px;
+  min-height: 44px;
+  text-underline-offset: 4px;
+  text-decoration: underline;
+}
+.export-guide-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.export-guide-footer {
+  flex-shrink: 0;
+  padding: 15px 20px 12px;
+  border-top: 1px solid var(--rule);
+}
+.export-guide-footer > button {
+  width: 100%;
+}
+.export-guide-footer .fine {
+  text-align: center;
+  margin-top: 7px;
+}
 .import-steps {
   display: flex;
   justify-content: center;
@@ -1582,6 +1784,16 @@ select {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 18px;
+}
+.empty-plot {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed var(--rule);
+  text-align: center;
 }
 .storage-panel {
   background: var(--wash);

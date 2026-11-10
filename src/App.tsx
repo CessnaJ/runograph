@@ -3,6 +3,8 @@ import {
   APPLE_NOTICE,
   deviceLabel,
   sourceLabel,
+  supportsDetail,
+  detailNotice,
 } from "./core/copy";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
+import { ExportGuides } from "./components/ExportGuides";
 import { aggregate } from "./core/metrics";
 import { duration, issueLabel, num, pace } from "./core/format";
 import {
@@ -65,6 +68,14 @@ function initialTab(): Tab {
       : location.hash === "#growth"
         ? "growth"
         : "summary";
+}
+function initialGrowth(data: Dataset) {
+  return data.source === "apple" ||
+    (data.source &&
+      data.source !== "samsung" &&
+      !data.profiles.some((p) => (p.windows?.length ?? 0) > 0))
+    ? "habit"
+    : "heart";
 }
 function downloadReport(
   data: Dataset,
@@ -240,7 +251,7 @@ export default function App() {
       .then((saved) => {
         if (cancelled || sequence.current !== version || !saved) return;
         setData(saved.data);
-        setGrowthView(saved.data.source === "apple" ? "habit" : "heart");
+        setGrowthView(initialGrowth(saved.data));
         setSavedGeneration(saved.generation);
         setTab("summary");
         location.hash = "summary";
@@ -377,7 +388,7 @@ export default function App() {
         msg.requestId === current.current.import
       ) {
         setData(msg.data);
-        setGrowthView(msg.data.source === "apple" ? "habit" : "heart");
+        setGrowthView(initialGrowth(msg.data));
         setBusy(false);
         setTab("summary");
         location.hash = "summary";
@@ -482,9 +493,10 @@ export default function App() {
     setDetailLoading(true);
     const requestId = ++sequence.current;
     current.current.detail = requestId;
-    if (data?.sessions.find((s) => s.id === id)?.source === "apple") {
+    const opening = data?.sessions.find((s) => s.id === id);
+    if (opening && !supportsDetail(opening)) {
       setDetailLoading(false);
-      setDetailError(APPLE_DETAIL_NOTICE);
+      setDetailError(detailNotice(opening));
       window.scrollTo({ top: 0, behavior: "instant" });
       return;
     }
@@ -562,9 +574,7 @@ export default function App() {
       return;
     }
     if (
-      ids.some(
-        (id) => data?.sessions.find((s) => s.id === id)?.source === "apple",
-      )
+      ids.some((id) => !supportsDetail(data?.sessions.find((s) => s.id === id)))
     ) {
       setPairLoading(false);
       return;
@@ -690,7 +700,7 @@ export default function App() {
       <input
         ref={input}
         type="file"
-        accept=".zip,.xml,application/zip,application/x-zip-compressed,application/xml,text/xml"
+        accept=".zip,.xml,.gpx,.tcx,.fit,.gz,.json,application/zip,application/x-zip-compressed,application/xml,text/xml,application/gzip,application/json"
         aria-label="러닝 파일 불러오기"
         hidden
         onChange={(e) => {
@@ -704,7 +714,7 @@ export default function App() {
             <Leaf size={16} />
             <span>기록을 서버로 보내지 않아요</span>
           </div>
-          <p className="eyebrow">삼성헬스 · 애플 건강 러닝 기록</p>
+          <p className="eyebrow">내 앱에 쌓인 러닝 기록</p>
           <h1>
             뛰고 난 뒤,
             <br />
@@ -730,6 +740,7 @@ export default function App() {
             </div>
           ) : (
             <>
+              <ExportGuides onChooseFile={() => input.current?.click()} />
               <Button
                 className="select-file"
                 onClick={() => input.current?.click()}
@@ -739,7 +750,7 @@ export default function App() {
                 <ArrowUpRight size={18} />
               </Button>
               <p className="fine">
-                선택한 파일은 이 기기에서만 읽어요.
+                이미 파일이 있다면 바로 불러오세요. 이 기기에서만 읽어요.
                 <br />
                 불러온 뒤 이 기기에 보관할 수 있어요.
               </p>
@@ -779,16 +790,16 @@ export default function App() {
             </span>
           </div>
           <details className="import-help">
-            <summary>내보내기 파일은 어디에서 받나요?</summary>
+            <summary>어떤 파일을 불러올 수 있나요?</summary>
             <p>
-              삼성헬스의 설정에서 ‘개인 데이터 다운로드’를 찾아보세요.
-              다운로드한 ZIP 파일을 그대로 선택하면 돼요. 메뉴 이름은 앱 버전에
-              따라 달라질 수 있어요.
+              삼성헬스 ZIP, 애플 건강 ZIP·export.xml, Strava 전체 ZIP과
+              FIT·TCX·GPX 운동 파일을 읽을 수 있어요. 운동 파일의 .gz 압축도
+              지원해요. Nike에서 받은 파일은 위 안내에서 지원 형식을 확인해
+              주세요.
             </p>
             <p>
-              애플 건강: iPhone 건강 앱 → 요약 → 프로필 사진 → ‘모든 건강 데이터
-              내보내기’. 내려받은 ZIP이나 압축 안의 export.xml을 선택하세요.
-              애플 건강은 현재 러닝 요약만 지원해요.
+              애플 건강은 현재 러닝 요약만 지원해요. 다른 운동 파일도 심박이나
+              시간별 데이터가 없으면 해당 분석이 제한돼요.
             </p>
             <p>
               ZIP은 512 MB, 애플 XML은 압축을 푼 크기 1 GB까지 읽을 수 있어요.
@@ -920,9 +931,7 @@ export default function App() {
                     onCompare={startComparison}
                     onGrowth={() => {
                       setGrowthConfig(null);
-                      setGrowthView(
-                        data.source === "apple" ? "habit" : "heart",
-                      );
+                      setGrowthView(initialGrowth(data));
                       changeTab("growth");
                       window.scrollTo({ top: 0, behavior: "instant" });
                     }}
@@ -1024,7 +1033,7 @@ export default function App() {
                           ? " · 시간대 정보가 없어 UTC 날짜로 표시"
                           : ""}
                       </p>
-                      {selected.source === "apple" && (
+                      {!supportsDetail(selected) && (
                         <p className="fine">
                           요약 평균 심박 {num(selected.meanHr)} bpm · 최대 심박{" "}
                           {num(selected.maxHr)} bpm
@@ -1111,7 +1120,8 @@ export default function App() {
                         {selected.quality?.some(
                           (q) =>
                             q.code === "short-record" ||
-                            q.code === "apple-overlap",
+                            q.code === "apple-overlap" ||
+                            q.code === "activity-overlap",
                         ) && (
                           <label className="check-setting">
                             <input
@@ -1125,7 +1135,11 @@ export default function App() {
                                 })
                               }
                             />
-                            {selected.source === "apple"
+                            {selected.issues.some(
+                              (code) =>
+                                code === "apple-overlap" ||
+                                code === "activity-overlap",
+                            )
                               ? "중복이 아닌 기록으로 확인하고 합계에 포함"
                               : "분할 기록으로 합계에 포함"}
                           </label>
@@ -1191,7 +1205,7 @@ export default function App() {
                             <small>
                               {duration(s.durationMs)} · 심박 {num(s.meanHr)}{" "}
                               bpm ·{" "}
-                              {s.source === "apple"
+                              {!supportsDetail(s)
                                 ? "요약만 지원"
                                 : s.status === "ready"
                                   ? "시간별 측정값 있음"
