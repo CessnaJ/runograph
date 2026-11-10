@@ -27,3 +27,8 @@ apple_health_export*/
 **/export.xml
 **/export_cda.xml
 **/*.gpx
+
+# Private activity exports (test files are generated in memory)
+**/*.fit
+**/*.tcx
+**/*.gz

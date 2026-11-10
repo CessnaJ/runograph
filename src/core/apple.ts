@@ -197,6 +197,7 @@ export class AppleHealthParser {
     this.sessions.push({
       id: "",
       source: "apple",
+      detailAvailable: false,
       startMs: start.ms,
       endMs: end.ms,
       offsetMs: start.offsetMs,

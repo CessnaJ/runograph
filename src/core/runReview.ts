@@ -1,6 +1,7 @@
 import { intervals, primaryRange } from "./analysis";
 import type { Interval } from "./analysis";
 import { usesSummary } from "./quality";
+import { supportsDetail } from "./copy";
 import type { Detail, Profile, Summary } from "./types";
 
 export interface ReviewStats {
@@ -161,7 +162,7 @@ export function summarizeRun(detail: Detail): RunReview {
 }
 
 function eligible(s: Summary) {
-  return s.source !== "apple" && !s.growthExcluded &&
+  return supportsDetail(s) && !s.growthExcluded &&
     s.durationMs !== null && Number.isFinite(s.durationMs) && s.durationMs > 0 &&
     usesSummary(s, "duration") && s.offsetMs !== null &&
     !!s.deviceGroup && s.deviceGroup !== "출처 미상";

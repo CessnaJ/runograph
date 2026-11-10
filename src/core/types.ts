@@ -1,9 +1,12 @@
 import type { RunReview } from "./runReview";
 import type { AutoDiscovery } from "./discovery";
 
+export type ImportSource = "samsung" | "apple" | "strava" | "nike" | "activity";
+
 export interface Summary {
   id: string;
-  source?: "samsung" | "apple";
+  source?: ImportSource;
+  detailAvailable?: boolean;
   startMs: number;
   endMs: number | null;
   offsetMs: number | null;
@@ -121,7 +124,7 @@ export interface Profile extends Weighted {
   } | null;
 }
 export interface Dataset {
-  source?: "samsung" | "apple";
+  source?: ImportSource;
   sessions: Summary[];
   profiles: Profile[];
   warnings: string[];

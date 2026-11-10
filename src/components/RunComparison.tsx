@@ -11,7 +11,7 @@ import { Button } from "./ui/button";
 import { duration, elapsed, num, pace } from "../core/format";
 import { changeText, runPair } from "../core/review";
 import { suggestSimilarRuns } from "../core/runReview";
-import { APPLE_DETAIL_NOTICE } from "../core/copy";
+import { detailNotice, supportsDetail } from "../core/copy";
 import { summaryPace, usesSummary } from "../core/quality";
 import type { Detail, EvidenceRef, Profile, Summary } from "../core/types";
 
@@ -42,7 +42,7 @@ export function RunComparison({
   }, [ids[0], ids[1]]);
   const pair = useMemo(() => (details ? runPair(...details) : null), [details]);
   const runs = ids.map((id) => sessions.find((s) => s.id === id));
-  const summaryOnly = runs.some((s) => s?.source === "apple");
+  const summaryOnly = runs.some((s) => !!s && !supportsDetail(s));
   const similar = useMemo(
     () => (runs[0] ? suggestSimilarRuns(runs[0], sessions, profiles) : []),
     [ids[0], sessions, profiles],
@@ -128,7 +128,7 @@ export function RunComparison({
       </details>
       {!ids[0] || !ids[1] ? (
         <p className="empty-note">
-          {sessions.some((s) => s.source === "apple")
+          {sessions.some((s) => !supportsDetail(s))
             ? "두 기록을 고르면 전체 거리·운동시간·평균 페이스·요약 심박을 나란히 볼 수 있어요."
             : "두 기록을 고르면 같은 운동 경과시간의 심박과 페이스를 비교해요."}
         </p>
@@ -138,7 +138,9 @@ export function RunComparison({
         </p>
       ) : summaryOnly ? (
         <section aria-label="두 러닝 요약 비교">
-          <p className="fine">{APPLE_DETAIL_NOTICE}</p>
+          <p className="fine">
+            {detailNotice(runs.find((s) => s && !supportsDetail(s)))}
+          </p>
           <table className="pair-table">
             <caption>두 러닝의 전체 요약</caption>
             <thead>

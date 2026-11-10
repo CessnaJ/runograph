@@ -14,6 +14,11 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
       "apple-overlap",
       "시간이 겹치는 러닝이 있어 중복일 수 있어요. 기본 합계에서 제외하며 직접 포함할 수 있어요.",
     );
+  if (s.issues.includes("activity-overlap"))
+    review(
+      "activity-overlap",
+      "시간이 겹치는 운동 파일이 있어 같은 러닝의 복사본일 수 있어요. 기본 합계에서 제외하며 원본을 확인한 뒤 포함할 수 있어요.",
+    );
   if (s.durationMs !== null && s.durationMs < 60000)
     review(
       "short-record",
@@ -124,6 +129,7 @@ export function usesSummary(
         "summary-pace-review",
         "summary-detail-speed",
         "apple-overlap",
+        "activity-overlap",
       ].includes(c),
     ),
   ]);
@@ -138,6 +144,7 @@ export function usesSummary(
   if (s.inclusion === "include") {
     codes.delete("short-record");
     codes.delete("apple-overlap");
+    codes.delete("activity-overlap");
   }
   return codes.size === 0;
 }

@@ -42,7 +42,15 @@ async function handle(msg: WorkerRequest) {
           }
           try {
             const detail = await archive.detail(summary);
-            summary.quality = qualityIssues(summary, detail);
+            const computedQuality = qualityIssues(summary, detail);
+            summary.quality = [
+              ...computedQuality,
+              ...(summary.quality ?? []).filter(
+                (q) =>
+                  q.action === "notice" &&
+                  !computedQuality.some((newIssue) => newIssue.code === q.code),
+              ),
+            ];
             summary.issues.push(
               ...summary.quality
                 .map((q) => q.code)
@@ -90,7 +98,7 @@ async function handle(msg: WorkerRequest) {
         percent: 97,
       });
       const discoveries =
-        archive.source === "apple"
+        profiles.length === 0
           ? undefined
           : {
               heart: discoverComparison(sessions, profiles, "heart"),

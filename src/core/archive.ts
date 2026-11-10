@@ -7,7 +7,13 @@ import {
 import { parseDetail, parseExerciseCsv } from "./parser";
 import { AppleHealthParser, APPLE_LIMITS } from "./apple";
 import { APPLE_DETAIL_NOTICE } from "./copy";
-import type { Detail, InternalSummary } from "./types";
+import {
+  ActivityStore,
+  activityFormat,
+  stravaRunningFiles,
+} from "./activityArchive";
+import { ACTIVITY_LIMITS } from "./activity";
+import type { Detail, ImportSource, InternalSummary } from "./types";
 export const LIMITS = {
   zip: 512 * 1024 ** 2,
   entries: 100000,
@@ -31,7 +37,8 @@ export function mainCsv(path: string): boolean {
   );
 }
 export class Archive {
-  source: "samsung" | "apple" = "samsung";
+  source: ImportSource = "samsung";
+  private activity: ActivityStore | null = null;
   private reader: ZipReader<Blob>;
   private json = new Map<string, FileEntry[]>();
   private cache = new Map<string, Detail>();
@@ -47,9 +54,11 @@ export class Archive {
     progress: (phase: string, percent: number) => void,
     signal?: AbortSignal,
   ) {
-    const head = await file.slice(0, 128).text();
-    const isXml = /^\s*(?:<\?xml\b|<HealthData\b|<!DOCTYPE\b)/.test(head);
-    if (isXml) {
+    if (signal?.aborted) throw new Error("분석을 취소했어요.");
+    const headBytes = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
+    const head = new TextDecoder().decode(headBytes);
+    const isApple = /<(?:HealthData\b|!DOCTYPE\s+HealthData\b)/.test(head);
+    if (isApple) {
       const archive = new Archive(file);
       archive.source = "apple";
       const result = await archive.readApple(
@@ -60,6 +69,38 @@ export class Archive {
       );
       return { archive, ...result };
     }
+    if (
+      activityFormat(headBytes) ||
+      (headBytes[0] === 0x1f && headBytes[1] === 0x8b)
+    ) {
+      if (file.size > ACTIVITY_LIMITS.bytes)
+        throw new Error(
+          "개별 운동 파일은 128 MB까지 읽을 수 있어요. 크기 제한을 넘었어요.",
+        );
+      const archive = new Archive(file);
+      try {
+        archive.activity = await ActivityStore.open(
+          [
+            {
+              name: "activity",
+              read: async () => new Uint8Array(await file.arrayBuffer()),
+            },
+          ],
+          false,
+          progress,
+          signal,
+        );
+        archive.source = archive.activity.source;
+        return {
+          archive,
+          sessions: archive.activity.sessions,
+          warnings: archive.activity.warnings,
+        };
+      } catch (error) {
+        await archive.close();
+        throw error;
+      }
+    }
     if (file.size > LIMITS.zip)
       throw new Error(
         "512 MB까지 읽을 수 있어요. 이 ZIP은 크기 제한을 넘었어요. 더 작은 내보내기 파일을 선택해 주세요.",
@@ -67,6 +108,8 @@ export class Archive {
     const archive = new Archive(file);
     const csv: FileEntry[] = [];
     const xml: FileEntry[] = [];
+    const activityFiles: FileEntry[] = [];
+    const stravaIndexes: FileEntry[] = [];
     const names = new Set<string>();
     let count = 0;
     try {
@@ -85,6 +128,13 @@ export class Archive {
         if (count % 500 === 0)
           progress(`ZIP 안의 파일 확인 · ${count.toLocaleString()}개`, 0);
         if (entry.directory) continue;
+        if (/(?:^|\/)activities\.csv$/i.test(entry.filename))
+          stravaIndexes.push(entry);
+        if (
+          /\.(?:gpx|tcx|fit)(?:\.gz)?$/i.test(entry.filename) ||
+          /(?:activit|workout|run|nike|nrc)[^]*\.json$/i.test(entry.filename)
+        )
+          activityFiles.push(entry);
         if (entry.filename.split("/").at(-1) === "export.xml") xml.push(entry);
         else if (mainCsv(entry.filename)) csv.push(entry);
         else if (
@@ -98,7 +148,7 @@ export class Archive {
         }
       }
       if (xml.length) {
-        if (xml.length !== 1 || csv.length)
+        if (xml.length !== 1 || csv.length || stravaIndexes.length)
           throw new Error(
             "여러 내보내기 파일이 섞여 있어요. 원본 파일 하나를 선택해 주세요.",
           );
@@ -119,11 +169,50 @@ export class Archive {
         );
         return { archive, ...result };
       }
+      if (!csv.length && (activityFiles.length || stravaIndexes.length)) {
+        if (stravaIndexes.length > 1)
+          throw new Error(
+            "여러 Strava 내보내기 파일이 섞여 있어요. 원본 ZIP 하나를 선택해 주세요.",
+          );
+        let files = activityFiles;
+        if (stravaIndexes.length) {
+          const index = stravaIndexes[0];
+          const allowed = stravaRunningFiles(
+            await archive.read(index, LIMITS.csv, signal),
+          );
+          const parent = index.filename.slice(
+            0,
+            index.filename.length - "activities.csv".length,
+          );
+          files = files.filter(
+            (f) =>
+              allowed.has(f.filename) ||
+              (f.filename.startsWith(parent) &&
+                allowed.has(f.filename.slice(parent.length))),
+          );
+        }
+        archive.activity = await ActivityStore.open(
+          files.map((entry) => ({
+            name: entry.filename,
+            read: () => archive.readBytes(entry, ACTIVITY_LIMITS.bytes, signal),
+          })),
+          !!stravaIndexes.length,
+          progress,
+          signal,
+        );
+        archive.source = archive.activity.source;
+        archive.newReadBudget();
+        return {
+          archive,
+          sessions: archive.activity.sessions,
+          warnings: archive.activity.warnings,
+        };
+      }
       if (csv.length !== 1)
         throw new Error(
           csv.length
             ? "여러 내보내기 파일이 섞여 있어요. 삼성헬스에서 다운로드한 ZIP 하나를 선택해 주세요."
-            : "지원하는 운동 기록을 찾지 못했어요. 삼성헬스 ZIP 또는 애플 건강 export.xml이 들어 있는 ZIP을 선택해 주세요.",
+            : "지원하는 운동 기록을 찾지 못했어요. 삼성헬스·애플 건강·Strava ZIP, FIT·TCX·GPX 또는 Nike 활동 JSON을 선택해 주세요.",
         );
       progress("러닝 기록을 읽고 있어요", 10);
       const result = parseExerciseCsv(
@@ -193,9 +282,18 @@ export class Archive {
     limit: number,
     signal?: AbortSignal,
   ): Promise<string> {
+    return new TextDecoder("utf-8", { fatal: true }).decode(
+      await this.readBytes(entry, limit, signal),
+    );
+  }
+  private async readBytes(
+    entry: Entry,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<Uint8Array> {
     if (entry.directory || entry.encrypted)
       throw new Error(
-        "암호로 잠긴 파일은 읽을 수 없어요. 삼성헬스에서 다운로드한 원본 ZIP을 선택해 주세요.",
+        "암호로 잠긴 파일은 읽을 수 없어요. 원본 내보내기 ZIP을 선택해 주세요.",
       );
     if (entry.uncompressedSize > limit)
       throw new Error("ZIP 안의 파일이 읽기 크기 제한을 넘었어요.");
@@ -222,11 +320,11 @@ export class Archive {
         array.set(chunk, offset);
         offset += chunk.byteLength;
       }
-      return new TextDecoder("utf-8", { fatal: true }).decode(array);
+      return array;
     } catch (error) {
       if (error instanceof Error && /제한/.test(error.message)) throw error;
       throw new Error(
-        "ZIP 파일을 읽지 못했어요. 손상되거나 암호로 잠겼을 수 있어요. 삼성헬스에서 다시 다운로드한 파일을 선택해 주세요.",
+        "ZIP 파일을 읽지 못했어요. 손상되거나 암호로 잠겼을 수 있어요. 원본 파일을 다시 다운로드해 주세요.",
       );
     }
   }
@@ -235,6 +333,10 @@ export class Archive {
     signal?: AbortSignal,
   ): Promise<Detail> {
     if (this.source === "apple") throw new Error(APPLE_DETAIL_NOTICE);
+    if (this.activity) {
+      this.newReadBudget();
+      return this.activity.detail(summary);
+    }
     const cached = this.cache.get(summary.id);
     if (cached) {
       this.cache.delete(summary.id);
@@ -269,6 +371,8 @@ export class Archive {
     this.used = 0;
   }
   async close() {
+    this.activity?.close();
+    this.activity = null;
     this.cache.clear();
     this.json.clear();
     await this.reader.close();

@@ -34,6 +34,19 @@ export function issueLabel(code: string) {
         "apple-summary-conflict":
           "서로 다른 요약값이 있어 해당 값을 표시하지 않음",
         "apple-overlap": "시간이 겹치는 러닝 · 중복 확인 전 기본 합계에서 제외",
+        "activity-overlap": "시간이 겹치는 운동 파일 · 중복 확인 필요",
+        "summary-only": "시간별 측정값 없이 러닝 요약만 포함",
+        "activity-summary-only": "시간별 측정값 없이 러닝 요약만 포함",
+        "activity-elapsed-time":
+          "운동시간 대신 일시정지를 포함한 경과시간 사용",
+        "activity-distance-speed": "누적 거리·시각으로 구한 구간 평균속도 포함",
+        "activity-segment-break": "원본 트랙 분리·일시정지 경계 보존",
+        "activity-type-unknown": "운동 종류가 없어 러닝 여부 확인 필요",
+        "activity-speed-unavailable":
+          "파일에 속도·거리가 없어 페이스 분석 불가",
+        "nike-unit-or-value-unknown": "Nike 측정 단위·값을 확인할 수 없어 제외",
+        "nike-invalid-values": "Nike 측정 시각·구간이 잘못되어 제외",
+        "nike-summary-conflict": "Nike 요약값이 충돌해 해당 값 제외",
         "offset-unknown": "시간대 정보 없음 · UTC 날짜로 표시",
         "conflicting-points": "같은 시각에 서로 다른 값이 있어 계산에서 뺐어요",
         "size-limit": "측정 파일이 너무 커요",
