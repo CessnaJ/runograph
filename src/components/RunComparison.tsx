@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -10,12 +10,14 @@ import {
 import { Button } from "./ui/button";
 import { duration, elapsed, num, pace } from "../core/format";
 import { changeText, runPair } from "../core/review";
+import { suggestSimilarRuns } from "../core/runReview";
 import { APPLE_DETAIL_NOTICE } from "../core/copy";
 import { summaryPace, usesSummary } from "../core/quality";
-import type { Detail, EvidenceRef, Summary } from "../core/types";
+import type { Detail, EvidenceRef, Profile, Summary } from "../core/types";
 
 export function RunComparison({
   sessions,
+  profiles = [],
   ids,
   details,
   loading,
@@ -25,6 +27,7 @@ export function RunComparison({
   onBack,
 }: {
   sessions: Summary[];
+  profiles?: Profile[];
   ids: [string, string];
   details: [Detail, Detail] | null;
   loading: boolean;
@@ -33,9 +36,17 @@ export function RunComparison({
   onOpen: (id: string, focus?: EvidenceRef) => void;
   onBack: () => void;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(!ids[0] || !ids[1]);
+  useEffect(() => {
+    setPickerOpen(!ids[0] || !ids[1]);
+  }, [ids[0], ids[1]]);
   const pair = useMemo(() => (details ? runPair(...details) : null), [details]);
   const runs = ids.map((id) => sessions.find((s) => s.id === id));
   const summaryOnly = runs.some((s) => s?.source === "apple");
+  const similar = useMemo(
+    () => (runs[0] ? suggestSimilarRuns(runs[0], sessions, profiles) : []),
+    [ids[0], sessions, profiles],
+  );
   const sorted = [...sessions].sort((a, b) => b.startMs - a.startMs);
   const usable =
     pair &&
@@ -50,38 +61,71 @@ export function RunComparison({
       </Button>
       <div className="page-heading compact-heading">
         <h1>두 러닝 나란히 보기</h1>
-        <p className="subtle">같은 코스·비슷한 목적의 기록을 골라보세요.</p>
+        <p className="subtle">
+          같은 운동 시점의 심박과 페이스를 나란히 살펴보세요.
+        </p>
       </div>
-      <div className="pair-selectors">
-        {[0, 1].map((i) => (
-          <label key={i}>
-            {i === 0 ? "기준 러닝" : "비교할 러닝"}
-            <select
-              aria-label={i === 0 ? "기준 러닝" : "비교할 러닝"}
-              value={ids[i]}
-              onChange={(e) =>
-                onSelect(
-                  i === 0 ? [e.target.value, ids[1]] : [ids[0], e.target.value],
-                )
-              }
-            >
-              <option value="">러닝 선택</option>
-              {sorted
-                .filter((s) => s.id !== ids[1 - i])
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.date} ·{" "}
-                    {new Date(s.startMs + (s.offsetMs ?? 0))
-                      .toISOString()
-                      .slice(11, 16)}{" "}
-                    · {num(s.distanceM === null ? null : s.distanceM / 1000, 2)}{" "}
-                    km
-                  </option>
-                ))}
-            </select>
-          </label>
-        ))}
-      </div>
+      <details
+        className="pair-picker"
+        open={pickerOpen}
+        onToggle={(event) => setPickerOpen(event.currentTarget.open)}
+      >
+        <summary>비교할 기록 바꾸기</summary>
+        {similar.length > 0 && (
+          <div className="similar-candidates" aria-label="비슷한 러닝 추천">
+            <span className="fine">비슷한 운동시간·5–20분 페이스</span>
+            <div className="similar-candidate-buttons">
+              {similar.map((s) => (
+                <Button
+                  key={s.id}
+                  variant={ids[1] === s.id ? "default" : "outline"}
+                  onClick={() => onSelect([ids[0], s.id])}
+                  aria-pressed={ids[1] === s.id}
+                >
+                  {s.date.slice(5).replace("-", "/")} · {pace(s.pace)} /km
+                </Button>
+              ))}
+            </div>
+            <p className="fine">
+              같은 기기, 이전 8주에서 골랐어요. 심박 차이는 추천 기준에 쓰지
+              않았어요. 아래에서 직접 바꿀 수 있어요.
+            </p>
+          </div>
+        )}
+        <div className="pair-selectors">
+          {[0, 1].map((i) => (
+            <label key={i}>
+              {i === 0 ? "기준 러닝" : "비교할 러닝"}
+              <select
+                aria-label={i === 0 ? "기준 러닝" : "비교할 러닝"}
+                value={ids[i]}
+                onChange={(e) =>
+                  onSelect(
+                    i === 0
+                      ? [e.target.value, ids[1]]
+                      : [ids[0], e.target.value],
+                  )
+                }
+              >
+                <option value="">러닝 선택</option>
+                {sorted
+                  .filter((s) => s.id !== ids[1 - i])
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.date} ·{" "}
+                      {new Date(s.startMs + (s.offsetMs ?? 0))
+                        .toISOString()
+                        .slice(11, 16)}{" "}
+                      ·{" "}
+                      {num(s.distanceM === null ? null : s.distanceM / 1000, 2)}{" "}
+                      km
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      </details>
       {!ids[0] || !ids[1] ? (
         <p className="empty-note">
           {sessions.some((s) => s.source === "apple")
@@ -188,7 +232,8 @@ export function RunComparison({
               )}
               <p className="subtle">
                 두 러닝 모두 시작 후 {elapsed(pair.from)}–{elapsed(pair.to)}를
-                비교했어요.
+                비교했어요. 두 기록에 공통으로 측정된{" "}
+                {num(pair.current.sec / 60, 1)}분을 썼어요.
               </p>
               <p className="fine">
                 같은 경과시간의 관측 비교예요. 코스·날씨·강도가 같다는 뜻은
@@ -232,7 +277,7 @@ export function RunComparison({
                   <td>{num(pair.previous.hr)} bpm</td>
                 </tr>
                 <tr>
-                  <th>측정 비율</th>
+                  <th>공통 측정 비율</th>
                   <td>{num(pair.current.coverage * 100)}%</td>
                   <td>{num(pair.previous.coverage * 100)}%</td>
                 </tr>
@@ -317,10 +362,10 @@ export function RunComparison({
             <details className="journal-details">
               <summary>전체 운동량·계산 기준</summary>
               <p className="fine">
-                평균은 심박·속도가 함께 측정된 시간으로 가중해요. 비교 구간은
-                시작 5분 이후 공통 구간 중 최대 15분이며, 함께 측정된 비율이 70%
-                미만인 값은 표시하지 않아요. 점은 해당 시점부터 1분 구간의
-                평균이에요. 비어 있는 구간은 잇지 않아요.
+                평균은 두 기록 모두 심박·속도가 함께 측정된 동일한 경과시간으로
+                가중해요. 비교 구간은 시작 5분 이후 공통 구간 중 최대 15분이며,
+                공통 측정 비율이 70% 미만인 값은 표시하지 않아요. 점은 해당
+                시점부터 1분 구간의 평균이에요. 비어 있는 구간은 잇지 않아요.
               </p>
               {runs.map(
                 (run) =>

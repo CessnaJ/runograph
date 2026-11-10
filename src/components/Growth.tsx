@@ -26,6 +26,7 @@ import {
   type Question,
 } from "../core/analysis";
 import { elapsed, num, pace } from "../core/format";
+import { discoverComparison } from "../core/discovery";
 import type { EvidenceRef, Profile, Summary } from "../core/types";
 import { Button } from "./ui/button";
 export type GrowthView = Question | "duration" | "halves" | "habit";
@@ -50,6 +51,51 @@ function RunDot({
     />
   );
 }
+function signed(n: number) {
+  const rounded = Math.round(n * 10) / 10;
+  return `${rounded > 0 ? "+" : ""}${num(rounded, 1)}`;
+}
+function settingRange(result: Comparison) {
+  const range = result.sensitivity;
+  if (!range) return "";
+  const heart = result.config.question === "heart";
+  const unit = heart ? "bpm" : "초/km";
+  if (range.max < 0)
+    return `${num(Math.abs(range.max), 1)}–${num(Math.abs(range.min), 1)} ${unit} ${heart ? "낮음" : "빠름"}`;
+  if (range.min > 0)
+    return `${num(range.min, 1)}–${num(range.max, 1)} ${unit} ${heart ? "높음" : "느림"}`;
+  return `${signed(range.min)}–${signed(range.max)} ${unit} (최근 − 이전)`;
+}
+function sameConfig(a: CompareConfig, b: CompareConfig) {
+  return (
+    a.question === b.question &&
+    a.days === b.days &&
+    a.anchor === b.anchor &&
+    a.target === b.target &&
+    a.device === b.device &&
+    a.width === b.width &&
+    a.elapsedFrom === b.elapsedFrom &&
+    a.elapsedTo === b.elapsedTo &&
+    a.phases.length === b.phases.length &&
+    a.phases.every((p, i) => p === b.phases[i])
+  );
+}
+function differenceLabel(result: Comparison) {
+  if (result.difference === null) return "차이를 계산할 수 없어요";
+  const heart = result.config.question === "heart";
+  const diff = Math.round(result.difference * 10) / 10;
+  return `${num(Math.abs(diff), 1)} ${heart ? "bpm" : "초/km"} ${
+    diff === 0
+      ? "차이 (반올림)"
+      : heart
+        ? diff < 0
+          ? "낮음"
+          : "높음"
+        : diff < 0
+          ? "빨라짐"
+          : "느려짐"
+  }`;
+}
 export function ComparisonHeadline({ result }: { result: Comparison }) {
   const isHeart = result.config.question === "heart",
     diff = result.difference;
@@ -59,8 +105,10 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
       ? "이 조건에서는 비교할 기록이 부족해요."
       : result.state === "conditions"
         ? "조건이 달라 직접 비교하기 어려워요."
-        : result.state === "sensitive" && result.sensitivity?.directionChanged
-          ? "설정에 따라 차이의 방향이 뒤바뀌어요."
+        : result.state === "sensitive"
+          ? result.sensitivity?.directionChanged
+            ? "설정에 따라 차이의 방향이 뒤바뀌어요."
+            : "설정을 바꾸면 비교 가능 여부가 달라져요."
           : diff === null
             ? "비교에 쓸 측정값이 없어요."
             : displayDiff === 0
@@ -68,6 +116,8 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
               : isHeart
                 ? `최근 심박이 ${diff < 0 ? "낮아졌어요" : "높아졌어요"}.`
                 : `최근 페이스가 ${diff < 0 ? "빨라졌어요" : "느려졌어요"}.`;
+  const primaryDifference =
+    result.state === "ready" || result.state === "reference";
   return (
     <div
       className="comparison-answer"
@@ -76,7 +126,7 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
     >
       <span className="status-label">{STATE_LABEL[result.state]}</span>
       <h2>{message}</h2>
-      {diff !== null && result.state !== "insufficient" && (
+      {diff !== null && primaryDifference && (
         <p className="answer-number">
           {num(Math.abs(displayDiff ?? 0), 1)}{" "}
           <small>
@@ -94,26 +144,47 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
           </small>
         </p>
       )}
-      <p className="subtle">
-        이전 {result.previous.count}회 · 최근 {result.recent.count}회
-      </p>
-      {result.baseState === "conditions" && result.reason[0] && (
-        <p className="fine">{result.reason[0]}</p>
+      {result.state === "sensitive" && result.sensitivity && (
+        <div className="analysis-setting-range">
+          <span>확인한 설정의 범위</span>
+          <strong>{settingRange(result)}</strong>
+          <p className="fine">평균의 오차 범위가 아니에요.</p>
+        </div>
       )}
+      {(result.state === "conditions" || result.state === "insufficient") &&
+        result.reason[0] && <p className="fine">{result.reason[0]}</p>}
       {result.state === "reference" && (
         <p className="fine">비교할 기록이 적어 참고로만 봐주세요.</p>
       )}
-      {result.state === "insufficient" && result.reason[0] && (
-        <p className="fine">{result.reason[0]}</p>
-      )}
-      <p className="fine">날씨와 코스 차이는 반영하지 않았어요.</p>
       {result.state === "sensitive" &&
         !result.sensitivity?.directionChanged && (
           <p className="fine">
-            확인한 설정에서 차이의 방향은 같았어요. 다만 비교 조건의 충족 여부가
-            달라 참고로 봐주세요.
+            확인한 설정에서 차이의 방향은 같았어요. 비교 근거가 충분한지는
+            설정에 따라 달라요.
           </p>
         )}
+    </div>
+  );
+}
+function ComparisonSupport({ result }: { result: Comparison }) {
+  return (
+    <div className="analysis-support" data-testid="comparison-support">
+      <p className="subtle">
+        이전 {result.previous.count}회 · 최근 {result.recent.count}회
+      </p>
+      <p className="period-caption">
+        이전 {result.periods.previous.join("–")}
+        <br />
+        최근 {result.periods.recent.join("–")} ·{" "}
+        {result.config.device === "all"
+          ? "모든 기기"
+          : deviceLabel(result.config.device)}
+      </p>
+      <p className="fine">
+        달리기 시작 후 {num(result.config.elapsedFrom / 60)}–
+        {num(result.config.elapsedTo / 60)}분의 같은 운동 구간을 비교해요.
+        날씨와 코스 차이는 반영하지 않았어요.
+      </p>
       <details className="comparison-notes">
         <summary>비교 조건·확인 사항</summary>
         {result.reason.map((r) => (
@@ -121,15 +192,150 @@ export function ComparisonHeadline({ result }: { result: Comparison }) {
             {r}
           </p>
         ))}
+        {(result.state === "conditions" || result.state === "sensitive") &&
+          result.difference !== null && (
+            <p className="fine">
+              현재 조건의 관측 차이: {differenceLabel(result)} · 직접적인 변화로
+              해석하기 어려워요.
+            </p>
+          )}
         {result.sensitivity && (
           <p className="fine">
-            비교 범위 변경·러닝 한 회 제외 시 차이 (최근 − 이전):{" "}
-            {num(result.sensitivity.min, 1)}–{num(result.sensitivity.max, 1)}{" "}
-            {isHeart ? "bpm" : "초/km"}
+            비교 범위 {result.sensitivity.bandwidthVariants}개
+            {result.sensitivity.stabilityVariants > 0
+              ? ` · 안정성 설정 ${result.sensitivity.stabilityVariants}개`
+              : ""}{" "}
+            · 러닝 한 회 제외 {result.sensitivity.leaveOneOutVariants}개를
+            확인했어요. 확인한 설정의 범위: {settingRange(result)}. 이 범위는
+            평균의 오차 범위가 아니에요.
           </p>
         )}
       </details>
     </div>
+  );
+}
+function ComparisonValues({ result }: { result: Comparison }) {
+  const heart = result.config.question === "heart";
+  return (
+    <div className="period-values">
+      {(["previous", "recent"] as const).map((key) => {
+        const p = result[key];
+        return (
+          <div key={key}>
+            <small>
+              {key === "previous" ? "이전" : "최근"} · {p.count}회 / {p.days}일
+            </small>
+            <strong>
+              {heart ? num(p.value, 1) : pace(p.value)}{" "}
+              <small>{heart ? "bpm" : "/km"}</small>
+            </strong>
+            <span>
+              기록별 범위 (중앙 50%){" "}
+              {p.iqr
+                ? heart
+                  ? `${num(p.iqr[0], 1)}–${num(p.iqr[1], 1)} bpm`
+                  : `${pace(p.iqr[0])}–${pace(p.iqr[1])} /km`
+                : "—"}
+            </span>
+            <span>
+              유효 기록 {num(p.effective, 1)}회 · 가중 시간 {num(p.sec / 60, 1)}
+              분 · 측정 {p.samples}개
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function AlternativeComparison({
+  result,
+  searched,
+  onApply,
+  otherQuestion = false,
+}: {
+  result: Comparison;
+  searched: number;
+  onApply: () => void;
+  otherQuestion?: boolean;
+}) {
+  const usable = result.state === "ready" || result.state === "reference";
+  const heart = result.config.question === "heart";
+  return (
+    <section
+      className="discovery-card"
+      aria-label="다른 비교 조건 제안"
+      data-testid="comparison-discovery"
+    >
+      <div className="discovery-heading">
+        <span className="status-label">
+          {otherQuestion ? "다른 질문에서 살펴보기" : "다른 조건에서 살펴보기"}
+        </span>
+        <span className="fine">{STATE_LABEL[result.state]}</span>
+      </div>
+      <h3>{GROWTH_QUESTIONS[result.config.question]}</h3>
+      <p>
+        최근{" "}
+        {result.config.days % 7 === 0
+          ? `${result.config.days / 7}주`
+          : `${result.config.days}일`}{" "}
+        / 이전{" "}
+        {result.config.days % 7 === 0
+          ? `${result.config.days / 7}주`
+          : `${result.config.days}일`}{" "}
+        · 달리기 시작 후 {num(result.config.elapsedFrom / 60)}–
+        {num(result.config.elapsedTo / 60)}분
+      </p>
+      <p className="fine">
+        {heart
+          ? `페이스 ${pace(result.config.target)} /km`
+          : `심박 ${num(result.config.target)} bpm`}{" "}
+        부근 ·{" "}
+        {result.config.device === "all"
+          ? "모든 기기"
+          : deviceLabel(result.config.device)}
+      </p>
+      <p className="discovery-observation">
+        {usable
+          ? `${heart ? "심박" : "페이스"} ${heart ? `${num(result.previous.value, 1)} → ${num(result.recent.value, 1)} bpm` : `${pace(result.previous.value)} → ${pace(result.recent.value)} /km`}`
+          : result.sensitivity?.directionChanged
+            ? "설정에 따라 차이의 방향이 달라요."
+            : result.difference !== null &&
+                Math.round(Math.abs(result.difference) * 10) > 0
+              ? `확인한 설정에서 최근 ${heart ? `심박이 ${result.difference < 0 ? "낮은" : "높은"}` : `페이스가 ${result.difference < 0 ? "빠른" : "느린"}`} 방향은 같았어요.`
+              : "설정에 따라 비교 가능 여부가 달라요."}
+      </p>
+      {!usable && result.sensitivity && (
+        <p className="fine">
+          확인한 설정의 범위: {settingRange(result)}.
+          {result.sensitivity.conditionsChanged &&
+            " 비교 조건의 충족 여부는 설정에 따라 달라요."}
+        </p>
+      )}
+      <p className="discovery-support">
+        이전 {result.previous.count}회 · 최근 {result.recent.count}회 · 유효{" "}
+        {num(result.previous.effective, 1)} / {num(result.recent.effective, 1)}
+        회
+      </p>
+      <p className="fine">
+        이전 {result.periods.previous.join("–")}
+        <br />
+        최근 {result.periods.recent.join("–")}
+      </p>
+      <Button variant="outline" onClick={onApply}>
+        이 비교 자세히 보기
+      </Button>
+      <details className="comparison-notes">
+        <summary>이 조건을 제안한 이유</summary>
+        <p className="fine">
+          {searched}개 후보에서 같은 기기·운동 시점과 기록 수·측정 시간을 먼저
+          확인했어요. 차이가 큰지, 좋아지는 방향인지는 선정에 쓰지 않았어요.
+        </p>
+        <p className="fine">
+          위에 표시한 기간과 운동 구간으로 얻은 관측이에요. 체력 향상을 확정하는
+          결과는 아니에요.
+        </p>
+      </details>
+    </section>
   );
 }
 export function ComparisonPlot({
@@ -284,6 +490,8 @@ export function Growth({
   onView,
   onExclude,
   revision = 0,
+  initialDiscovery,
+  relatedDiscovery,
 }: {
   sessions: Summary[];
   profiles: Profile[];
@@ -294,10 +502,13 @@ export function Growth({
   onView: (view: GrowthView) => void;
   onExclude: (id: string, excluded: boolean) => void;
   revision?: number;
+  initialDiscovery?: import("../core/discovery").AutoDiscovery;
+  relatedDiscovery?: import("../core/discovery").AutoDiscovery;
 }) {
   const suggested = useMemo(
-    () => suggestComparison(sessions, profiles),
-    [sessions, profiles],
+    () =>
+      suggestComparison(sessions, profiles, view === "pace" ? "pace" : "heart"),
+    [sessions, profiles, view],
   );
   const cfg = config ?? suggested;
   const [advanced, setAdvanced] = useState(false);
@@ -311,6 +522,70 @@ export function Growth({
     () => compare(sessions, profiles, cfg, true, revision),
     [sessions, profiles, cfg, revision],
   );
+  const discovery = useMemo(
+    () =>
+      initialDiscovery &&
+      cfg.days === 28 &&
+      initialDiscovery.preferred.question === cfg.question
+        ? initialDiscovery
+        : discoverComparison(sessions, profiles, cfg.question, cfg.days),
+    [sessions, profiles, cfg.question, cfg.days, revision, initialDiscovery],
+  );
+  const maySuggest =
+    sameConfig(cfg, discovery.preferred) &&
+    ["insufficient", "conditions", "sensitive", "reference"].includes(
+      result.state,
+    );
+  const related = useMemo(() => {
+    if (
+      !maySuggest ||
+      discovery.alternative ||
+      (view !== "heart" && view !== "pace")
+    )
+      return null;
+    const question = cfg.question === "heart" ? "pace" : "heart";
+    const found =
+      relatedDiscovery &&
+      cfg.days === 28 &&
+      relatedDiscovery.preferred.question === question
+        ? relatedDiscovery
+        : discoverComparison(sessions, profiles, question, cfg.days);
+    const candidate =
+      found.alternative ?? compare(sessions, profiles, found.preferred);
+    return ["ready", "reference"].includes(candidate.baseState)
+      ? { result: candidate, searched: found.searched }
+      : null;
+  }, [
+    maySuggest,
+    discovery.alternative,
+    cfg.question,
+    cfg.days,
+    view,
+    relatedDiscovery,
+    sessions,
+    profiles,
+  ]);
+  const alternative = maySuggest
+    ? (discovery.alternative ?? related?.result)
+    : null;
+  const knownDates = sessions
+    .filter((s) => s.offsetMs !== null)
+    .map((s) => s.date)
+    .sort();
+  const anchorOutsideSelection =
+    !!knownDates.length &&
+    (cfg.anchor < knownDates[0] || cfg.anchor > knownDates.at(-1)!);
+  const findConditions = () =>
+    onConfig(
+      suggestComparison(
+        sessions,
+        profiles,
+        cfg.question,
+        cfg.days,
+        cfg.elapsedFrom,
+        cfg.elapsedTo,
+      ),
+    );
   const [trainingPeriod, setTrainingPeriod] = useState<"week" | "month">(
     "week",
   );
@@ -352,7 +627,7 @@ export function Growth({
           cfg.days,
           cfg.elapsedFrom,
           cfg.elapsedTo,
-          cfg.anchor,
+          anchorOutsideSelection ? undefined : cfg.anchor,
         ),
       );
   }
@@ -377,95 +652,98 @@ export function Growth({
       </div>
       {isCompare ? (
         <>
-          <div className="comparison-controls">
-            <label>
-              비교 기간
-              <select
-                aria-label="비교 기간"
-                value={
-                  !customPeriod && [14, 28, 56].includes(cfg.days)
-                    ? cfg.days
-                    : "custom"
-                }
-                onChange={(e) => {
-                  if (e.target.value !== "custom") {
-                    setCustomPeriod(false);
-                    set({ days: Number(e.target.value) });
-                  } else {
-                    setCustomPeriod(true);
-                    setAdvanced(true);
-                  }
-                }}
-              >
-                <option value="14">최근 2주 / 이전 2주</option>
-                <option value="28">최근 4주 / 이전 4주</option>
-                <option value="56">최근 8주 / 이전 8주</option>
-                <option value="custom">직접 지정</option>
-              </select>
-            </label>
-            <label className="target-control">
-              {view === "heart" ? "비교 페이스 (/km)" : "비교 심박 (bpm)"}
-              <strong>
-                {view === "heart" ? pace(cfg.target) : num(cfg.target)}
-              </strong>
-              <input
-                aria-label={view === "heart" ? "비교 페이스" : "비교 심박"}
-                type="range"
-                min={view === "heart" ? 240 : 70}
-                max={view === "heart" ? 600 : 220}
-                step={view === "heart" ? 1 : 1}
-                value={cfg.target}
-                onChange={(e) => set({ target: Number(e.target.value) })}
-              />
-            </label>
-          </div>
-          <p className="period-caption">
-            이전 {result.periods.previous.join("–")}
-            <br />
-            최근 {result.periods.recent.join("–")} ·{" "}
-            {cfg.device === "all" ? "모든 기기" : deviceLabel(cfg.device)}
-          </p>
+          {anchorOutsideSelection && (
+            <div className="analysis-selection-notice" role="status">
+              <p>비교 기준일 {cfg.anchor}이 선택한 기록의 날짜 밖에 있어요.</p>
+              <Button variant="outline" onClick={findConditions}>
+                선택한 기록으로 다시 찾기
+              </Button>
+            </div>
+          )}
           <ComparisonHeadline result={result} />
           <ComparisonPlot result={result} onOpen={onOpen} />
           <p className="fine">
             회색은 이전, 녹색은 최근 러닝이에요. 점을 누르면 비교 구간을 볼 수
             있어요. 점선은 평균, 옅은 띠는 기록별 범위(중앙 50%)예요.
           </p>
-          <div className="period-values">
-            {(["previous", "recent"] as const).map((key) => {
-              const p = result[key];
-              return (
-                <div key={key}>
-                  <small>
-                    {key === "previous" ? "이전" : "최근"} · {p.count}회 /{" "}
-                    {p.days}일
-                  </small>
-                  <strong>
-                    {view === "heart" ? num(p.value, 1) : pace(p.value)}{" "}
-                    <small>{view === "heart" ? "bpm" : "/km"}</small>
-                  </strong>
-                  <span>
-                    기록별 범위 (중앙 50%){" "}
-                    {p.iqr
-                      ? view === "heart"
-                        ? `${num(p.iqr[0], 1)}–${num(p.iqr[1], 1)} bpm`
-                        : `${pace(p.iqr[0])}–${pace(p.iqr[1])} /km`
-                      : "—"}
-                  </span>
-                  <span>
-                    유효 기록 {num(p.effective, 1)}회 · 가중 시간{" "}
-                    {num(p.sec / 60, 1)}분 · 측정 {p.samples}개
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <ComparisonSupport result={result} />
+          {alternative && (
+            <AlternativeComparison
+              result={alternative}
+              searched={
+                discovery.alternative
+                  ? discovery.searched
+                  : (related?.searched ?? 0)
+              }
+              otherQuestion={alternative.config.question !== cfg.question}
+              onApply={() => {
+                onView(alternative.config.question);
+                onConfig(alternative.config);
+                setCustomPeriod(
+                  ![14, 28, 56].includes(alternative.config.days),
+                );
+              }}
+            />
+          )}
+          {result.state === "ready" || result.state === "reference" ? (
+            <ComparisonValues result={result} />
+          ) : (
+            <details className="journal-details analysis-observed-values">
+              <summary>기간별 평균·근거량</summary>
+              <p className="fine">
+                현재 조건의 측정값이에요. 직접적인 변화로 해석하기 어려워요.
+              </p>
+              <ComparisonValues result={result} />
+            </details>
+          )}
           <details
             className="journal-details"
             open={advanced}
             onToggle={(e) => setAdvanced(e.currentTarget.open)}
           >
             <summary>비교 조건 조정</summary>
+            <div className="comparison-controls">
+              <label>
+                비교 기간
+                <select
+                  aria-label="비교 기간"
+                  value={
+                    !customPeriod && [14, 28, 56].includes(cfg.days)
+                      ? cfg.days
+                      : "custom"
+                  }
+                  onChange={(e) => {
+                    if (e.target.value !== "custom") {
+                      setCustomPeriod(false);
+                      set({ days: Number(e.target.value) });
+                    } else {
+                      setCustomPeriod(true);
+                      setAdvanced(true);
+                    }
+                  }}
+                >
+                  <option value="14">최근 2주 / 이전 2주</option>
+                  <option value="28">최근 4주 / 이전 4주</option>
+                  <option value="56">최근 8주 / 이전 8주</option>
+                  <option value="custom">직접 지정</option>
+                </select>
+              </label>
+              <label className="target-control">
+                {view === "heart" ? "비교 페이스 (/km)" : "비교 심박 (bpm)"}
+                <strong>
+                  {view === "heart" ? pace(cfg.target) : num(cfg.target)}
+                </strong>
+                <input
+                  aria-label={view === "heart" ? "비교 페이스" : "비교 심박"}
+                  type="range"
+                  min={view === "heart" ? 240 : 70}
+                  max={view === "heart" ? 600 : 220}
+                  step={view === "heart" ? 1 : 1}
+                  value={cfg.target}
+                  onChange={(e) => set({ target: Number(e.target.value) })}
+                />
+              </label>
+            </div>
             <div className="filter-fields">
               <label>
                 비교 기준일
@@ -515,38 +793,27 @@ export function Growth({
                 달리기 시작 후
                 <select
                   aria-label="비교 운동 구간"
-                  value={cfg.elapsedFrom}
+                  value={`${cfg.elapsedFrom}:${cfg.elapsedTo}`}
                   onChange={(e) => {
-                    const a = Number(e.target.value);
+                    const [from, to] = e.target.value.split(":").map(Number);
                     set({
-                      elapsedFrom: a,
-                      elapsedTo: a + 900,
-                      phases: [a / 300, a / 300 + 1, a / 300 + 2],
+                      elapsedFrom: from,
+                      elapsedTo: to,
+                      phases: Array.from(
+                        { length: (to - from) / 300 },
+                        (_, i) => from / 300 + i,
+                      ),
                     });
                   }}
                 >
-                  <option value="300">5–20분 구간</option>
-                  <option value="600">10–25분 구간</option>
-                  <option value="1200">20–35분 구간</option>
+                  <option value="300:1200">5–20분 구간</option>
+                  <option value="600:1200">10–20분 구간</option>
+                  <option value="600:1500">10–25분 구간</option>
+                  <option value="1200:2100">20–35분 구간</option>
                 </select>
               </label>
             </div>
-            <Button
-              variant="outline"
-              onClick={() =>
-                onConfig(
-                  suggestComparison(
-                    sessions,
-                    profiles,
-                    cfg.question,
-                    cfg.days,
-                    cfg.elapsedFrom,
-                    cfg.elapsedTo,
-                    cfg.anchor,
-                  ),
-                )
-              }
-            >
+            <Button variant="outline" onClick={findConditions}>
               조건 다시 찾기
             </Button>
             <p className="fine">두 기간 모두 측정값이 충분한 조건을 찾아요.</p>

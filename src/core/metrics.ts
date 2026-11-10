@@ -1,6 +1,12 @@
 import { median } from "./parser";
 import { usesSummary } from "./quality";
-import { buildStableWindows, halfComparison, longestRun } from "./analysis";
+import {
+  buildStableWindows,
+  buildStabilityVariants,
+  halfComparison,
+  longestRun,
+} from "./analysis";
+import { summarizeRun } from "./runReview";
 import type {
   Detail,
   Drift,
@@ -434,6 +440,8 @@ export function profile(detail: Detail): Profile {
     observations: observations(detail),
     drift: driftAnalysis(detail, pairs),
     windows: stable.windows,
+    stabilityVariants: buildStabilityVariants(detail),
+    review: summarizeRun(detail),
     windowDiagnostics: stable.diagnostics,
     longestRunSec: longestRun(detail),
     halves: halfComparison(detail),
@@ -531,7 +539,5 @@ export function movementSegments(detail: Detail) {
     if (last && last.to === p.time && last.state === state) last.to = next.time;
     else segments.push({ from: p.time, to: next.time, state });
   }
-  return segments.map((s) =>
-    s.to - s.from < 30 ? { ...s, state: "미측정" as const } : s,
-  );
+  return segments;
 }

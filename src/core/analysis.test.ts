@@ -283,10 +283,12 @@ describe("stable observations and comparable periods", () => {
   it("computes same-HR pace directly from speed instead of inverting the HR comparison", () => {
     const { sessions, profiles, config } = dataset();
     profiles.forEach((p, i) =>
-      p.windows!.forEach((w) => {
-        w.hr = 140;
-        w.speed = i < 8 ? 2.3 : 2.4;
-      }),
+      [p.windows!, ...(p.stabilityVariants ?? []).map((v) => v.windows)]
+        .flat()
+        .forEach((w) => {
+          w.hr = 140;
+          w.speed = i < 8 ? 2.3 : 2.4;
+        }),
     );
     const c = compare(sessions, profiles, {
       ...config,

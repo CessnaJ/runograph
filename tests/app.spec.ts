@@ -109,7 +109,7 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
   expect(report).not.toContain("test-0.json");
   const parsed = JSON.parse(report);
   expect(parsed.sessions).toHaveLength(4);
-  expect(parsed.calculationVersion).toBe("0.2.0");
+  expect(parsed.calculationVersion).toBe("0.3.0");
   expect(parsed.inputRevision).toBeGreaterThan(0);
   expect(parsed.comparisons).toHaveLength(2);
   expect(parsed.comparisons[0]).toMatchObject({
@@ -117,6 +117,12 @@ test("mobile local import, synchronized chart modes/axis/zoom, filters, growth, 
     width: 0.08,
   });
   expect(parsed.comparisons[0].elapsedRangeSec).toEqual([300, 1200]);
+  expect(parsed.comparisons[0].stabilityCheck).toMatchObject({
+    performed: false,
+    testedVariants: 0,
+    contextsSec: [],
+    speedCv: [],
+  });
   expect(report).not.toContain("synthetic-device");
   await page.getByText("전체 기록 · 4회").click();
   await page.getByLabel("시작 날짜", { exact: true }).fill("2026-01-04");
@@ -255,10 +261,10 @@ test("v0.2 comparison evidence, question changes, exclusions and return preserve
   );
   await expect(page.getByTestId("comparison-answer")).toContainText("5.0");
   await expect(page.getByTestId("comparison-answer")).toContainText("bpm 낮음");
+  await page.getByText("비교 조건 조정", { exact: true }).click();
   await page.getByLabel("비교 기간", { exact: true }).selectOption("custom");
   await expect(page.getByLabel("기간 길이", { exact: true })).toBeVisible();
   await page.getByLabel("비교 기간", { exact: true }).selectOption("28");
-  await page.getByText("비교 조건 조정", { exact: true }).click();
   await page
     .locator('[data-testid="comparison-plot"] .recharts-scatter-symbol')
     .first()
@@ -269,6 +275,7 @@ test("v0.2 comparison evidence, question changes, exclusions and return preserve
   await page
     .getByRole("button", { name: "비교로 돌아가기", exact: true })
     .click();
+  await page.getByText("비교 조건 조정", { exact: true }).click();
   const paceBefore = await page
     .getByLabel("비교 페이스", { exact: true })
     .inputValue();
@@ -283,6 +290,7 @@ test("v0.2 comparison evidence, question changes, exclusions and return preserve
   await page
     .getByRole("button", { name: "비교로 돌아가기", exact: true })
     .click();
+  await page.getByText("비교 조건 조정", { exact: true }).click();
   await expect(page.getByLabel("비교 페이스", { exact: true })).toHaveValue(
     paceBefore,
   );
@@ -291,12 +299,16 @@ test("v0.2 comparison evidence, question changes, exclusions and return preserve
     .getByRole("button", { name: "이 러닝 빼고 비교", exact: true })
     .first()
     .click();
-  await expect(page.getByTestId("comparison-answer")).toContainText("이전 7회");
+  await expect(page.getByTestId("comparison-support")).toContainText(
+    "이전 7회",
+  );
   await page.getByText("비교에서 뺀 기록 1회·이유", { exact: true }).click();
   await page
     .getByRole("button", { name: "다시 비교에 포함", exact: true })
     .click();
-  await expect(page.getByTestId("comparison-answer")).toContainText("이전 8회");
+  await expect(page.getByTestId("comparison-support")).toContainText(
+    "이전 8회",
+  );
   await page.getByLabel("성장 질문", { exact: true }).selectOption("pace");
   await expect(page.getByLabel("비교 심박", { exact: true })).toBeVisible();
   await expect(page.locator(".period-values")).toContainText("/km");

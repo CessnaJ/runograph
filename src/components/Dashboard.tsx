@@ -1,10 +1,16 @@
 import { recap } from "../core/review";
+import { buildPastReference, suggestSimilarRuns } from "../core/runReview";
 import { APPLE_DETAIL_NOTICE } from "../core/copy";
 import { useMemo } from "react";
 import {
   Bar,
   BarChart,
+  Area,
+  ComposedChart,
   CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,7 +18,7 @@ import {
 } from "recharts";
 import { aggregate } from "../core/metrics";
 import { dayNumber, trainingRows } from "../core/analysis";
-import { datedActivity, summaryPace } from "../core/quality";
+import { datedActivity, summaryPace, usesSummary } from "../core/quality";
 import { duration, elapsed, num, pace } from "../core/format";
 import type { EvidenceRef, Profile, Summary } from "../core/types";
 import { Button } from "./ui/button";
@@ -27,10 +33,24 @@ export function Dashboard({
   profiles: Profile[];
   onOpen: (id: string, focus?: EvidenceRef) => void;
   onGrowth: () => void;
-  onCompare: (id: string) => void;
+  onCompare: (id: string, comparedId?: string) => void;
 }) {
   const latest = [...sessions].sort((a, b) => b.startMs - a.startMs)[0];
-  const halves = profiles.find((p) => p.id === latest.id)?.halves;
+  const latestProfile = profiles.find((p) => p.id === latest.id);
+  const halves = latestProfile?.halves;
+  const review = latestProfile?.review;
+  const finish = review?.finish?.accelerated ? review.finish : null;
+  const stableSec = (latestProfile?.windows ?? [])
+    .filter((w) => w.from >= 300 && w.to <= 1200)
+    .reduce((sum, w) => sum + w.sec, 0);
+  const similar = useMemo(
+    () => suggestSimilarRuns(latest, sessions, profiles),
+    [latest, sessions, profiles],
+  );
+  const past = useMemo(
+    () => buildPastReference(latest, sessions, profiles),
+    [latest, sessions, profiles],
+  );
   const answer = recap(halves);
   const stats = useMemo(
     () => aggregate(sessions, profiles),
@@ -74,23 +94,29 @@ export function Dashboard({
   }, [sessions, periods]);
   return (
     <>
-      <div className="page-heading compact-heading">
+      <div className="page-heading compact-heading review-heading">
         <p className="eyebrow">최근 러닝 · {latest.date}</p>
         <h1>이번 러닝 돌아보기</h1>
       </div>
-      <section className="run-recap" aria-label="최근 러닝 복기">
+      <section className="run-recap review-compact" aria-label="최근 러닝 복기">
         <div className="recap-stats">
           <div>
             <strong>
               {num(
-                latest.distanceM === null ? null : latest.distanceM / 1000,
+                latest.distanceM === null || !usesSummary(latest, "distance")
+                  ? null
+                  : latest.distanceM / 1000,
                 2,
               )}
             </strong>
             <span>km</span>
           </div>
           <div>
-            <strong>{duration(latest.durationMs)}</strong>
+            <strong>
+              {duration(
+                usesSummary(latest, "duration") ? latest.durationMs : null,
+              )}
+            </strong>
             <span>운동시간</span>
           </div>
           <div>
@@ -98,14 +124,37 @@ export function Dashboard({
             <span>/km</span>
           </div>
         </div>
-        {answer && halves ? (
+        {latest.quality?.some((q) => q.code === "summary-detail-average") && (
+          <p className="fine review-source-note">
+            요약·상세 페이스 차이 있음 · 복기는 상세 기준
+          </p>
+        )}
+        {finish ? (
+          <>
+            <h2 className="review-headline">마지막 3분에 속도를 높였어요.</h2>
+            <div className="half-readout review-readout">
+              <span>
+                직전 5분 <b>{pace(finish.before.pace)}</b> /km
+                {finish.before.hrCoverage >= 0.9
+                  ? ` · ${num(finish.before.hr)} bpm`
+                  : ""}
+              </span>
+              <span>
+                마지막 3분 <b>{pace(finish.last.pace)}</b> /km
+                {finish.last.hrCoverage >= 0.9
+                  ? ` · ${num(finish.last.hr)} bpm`
+                  : ""}
+              </span>
+            </div>
+          </>
+        ) : answer && halves ? (
           <>
             <p className="recap-context">전반에 비해 후반은</p>
-            <h2>
+            <h2 className="review-headline">
               {answer.pace}.<br />
               {answer.heart}.
             </h2>
-            <div className="half-readout">
+            <div className="half-readout review-readout">
               <span>
                 전반 <b>{pace(1000 / halves.first.speed)}</b> /km ·{" "}
                 {num(halves.first.hr)} bpm
@@ -115,21 +164,6 @@ export function Dashboard({
                 {num(halves.last.hr)} bpm
               </span>
             </div>
-            <p className="fine">
-              시작 후 {elapsed(halves.from)}–{elapsed(halves.to)} 구간을 같은
-              길이로 나눠 비교했어요.
-            </p>
-            <Button
-              onClick={() =>
-                onOpen(latest.id, {
-                  id: latest.id,
-                  from: halves.from,
-                  to: halves.to,
-                })
-              }
-            >
-              이 구간 그래프 보기 →
-            </Button>
           </>
         ) : latest.source === "apple" ? (
           <>
@@ -138,7 +172,6 @@ export function Dashboard({
               {num(latest.maxHr)} bpm
             </p>
             <p className="subtle">{APPLE_DETAIL_NOTICE}</p>
-            <Button onClick={() => onOpen(latest.id)}>러닝 요약 보기 →</Button>
           </>
         ) : (
           <>
@@ -147,10 +180,144 @@ export function Dashboard({
               전후반 비교에는 시작 5분 이후, 각 절반에 5분 이상과 충분한
               심박·속도 측정이 필요해요.
             </p>
-            <Button onClick={() => onOpen(latest.id)}>
-              러닝 그래프 보기 →
-            </Button>
           </>
+        )}
+        {review &&
+          latest.source !== "apple" &&
+          review.bins.some((b) => b.pace !== null) && (
+            <div
+              className="review-mini-chart"
+              role="img"
+              aria-label="운동 경과시간에 따른 실제 측정 페이스. 빈 구간은 측정 부족, 강조 구간은 마지막 3분."
+            >
+              <p className="review-chart-label">측정 페이스 · /km</p>
+              <ResponsiveContainer width="100%" height={132}>
+                <LineChart
+                  data={review.bins}
+                  margin={{ top: 5, right: 12, left: 0, bottom: 0 }}
+                >
+                  <XAxis
+                    type="number"
+                    dataKey="from"
+                    domain={[review.from, review.to]}
+                    tickFormatter={elapsed}
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    reversed
+                    width={42}
+                    domain={["auto", "auto"]}
+                    tickFormatter={pace}
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  {finish && (
+                    <ReferenceArea
+                      x1={finish.last.from}
+                      x2={finish.last.to}
+                      fill="var(--accent)"
+                      fillOpacity={0.1}
+                    />
+                  )}
+                  <Tooltip
+                    content={({ active, payload }) =>
+                      active && payload?.[0] ? (
+                        <div className="chart-tooltip">
+                          {elapsed(payload[0].payload.from)}–
+                          {elapsed(payload[0].payload.to)} ·{" "}
+                          {pace(payload[0].payload.pace)} /km
+                        </div>
+                      ) : null
+                    }
+                  />
+                  <Line
+                    dataKey="pace"
+                    stroke="var(--accent)"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="fine review-chart-legend">
+                실선: 페이스{finish ? " · 옅은 영역: 마지막 3분" : ""} · 빈 곳:
+                측정 부족
+              </p>
+            </div>
+          )}
+        <Button
+          className="review-detail-action"
+          onClick={() =>
+            onOpen(
+              latest.id,
+              finish
+                ? {
+                    id: latest.id,
+                    from: finish.before.from,
+                    to: finish.last.to,
+                  }
+                : answer && halves
+                  ? { id: latest.id, from: halves.from, to: halves.to }
+                  : undefined,
+            )
+          }
+        >
+          {finish
+            ? "마지막 구간 그래프 보기 →"
+            : answer && halves
+              ? "이 구간 그래프 보기 →"
+              : latest.source === "apple"
+                ? "러닝 요약 보기 →"
+                : "러닝 그래프 보기 →"}
+        </Button>
+        {review && latest.source !== "apple" && (
+          <div className="review-evidence">
+            <p className="review-coverage">
+              심박 {num(review.hrCoverage * 100)}% · 속도{" "}
+              {num(review.speedCoverage * 100)}% · 안정 구간{" "}
+              {num(stableSec / 60, 1)}분{stableSec < 180 ? "/3분" : ""}
+            </p>
+            <details className="review-measurement-details">
+              <summary>운동 구성·측정 기준</summary>
+              {finish ? (
+                <p className="fine">
+                  끝 3분을 직전 5분과 비교했어요.
+                  {finish.beforeSteady
+                    ? " 그전에는 전후반 페이스를 비슷하게 유지했어요."
+                    : ""}
+                </p>
+              ) : answer && halves ? (
+                <p className="fine">
+                  시작 후 {elapsed(halves.from)}–{elapsed(halves.to)} 구간을
+                  같은 길이로 나눠 비교했어요.
+                </p>
+              ) : null}
+              <p className="fine">
+                안정 구간은 운동 5–20분에서 심박·속도가 함께 측정되고 속도
+                변화가 작은 시간이에요. 장기 비교에는 최소 3분이 필요해요.
+              </p>
+              <p className="fine review-movement">
+                달리기 추정 {num(review.movement.runningSec / 60, 1)}분 · 걷기
+                추정 {num(review.movement.walkingSec / 60, 1)}분
+                {review.movement.stoppedSec > 0
+                  ? ` · 정지 추정 ${num(review.movement.stoppedSec)}초`
+                  : ""}
+                {review.movement.unknownSec > 0
+                  ? ` · 속도 미측정 ${num(review.movement.unknownSec)}초`
+                  : ""}
+              </p>
+              {stableSec < 180 && (
+                <p className="fine">
+                  흐름 복기는 볼 수 있어요. 장기 비교에는 안정 구간이 더
+                  필요해요.
+                </p>
+              )}
+            </details>
+          </div>
         )}
         {latest.quality?.some((q) => q.action === "review") && (
           <p className="fine">
@@ -162,17 +329,115 @@ export function Dashboard({
       <section className="journal-section compare-entry">
         <h2>지난 러닝과 나란히 보기</h2>
         <p className="subtle">
-          같은 코스나 비슷한 목적으로 달린 기록을 직접 골라보세요.
+          {similar.length
+            ? "같은 기기·비슷한 운동시간과 5–20분 페이스의 기록을 찾았어요."
+            : "자동으로 맞는 기록이 없어요. 같은 코스나 비슷한 목적의 기록을 직접 골라보세요."}
         </p>
+        {similar[0] && (
+          <div className="similar-primary">
+            <Button onClick={() => onCompare(latest.id, similar[0].id)}>
+              비슷한 {similar[0].date.slice(5).replace("-", "/")} 기록과 보기 →
+            </Button>
+            <p className="fine">
+              5–20분 페이스 {pace(review?.comparison.pace ?? null)} ↔{" "}
+              {pace(similar[0].pace)} /km · 같은 기기
+            </p>
+          </div>
+        )}
         <Button
           variant="outline"
           disabled={sessions.length < 2}
           onClick={() => onCompare(latest.id)}
         >
-          비교할 러닝 고르기 →
+          직접 고르기 →
         </Button>
         {sessions.length < 2 && (
           <p className="fine">러닝이 2개 이상이면 비교할 수 있어요.</p>
+        )}
+        {past && (
+          <div className="past-reference">
+            <h3>내 과거 범위와 오늘의 심박</h3>
+            <p className="fine">
+              같은 기기·비슷한 속도로 달린 과거 {past.dates}일의 가운데 50%예요.
+              운동 5–20분을 같은 경과시간끼리 비교해요.
+            </p>
+            <div
+              className="past-chart"
+              role="img"
+              aria-label="과거 심박의 가운데 50% 범위와 이번 러닝의 심박 비교"
+            >
+              <ResponsiveContainer width="100%" height={148}>
+                <ComposedChart
+                  data={past.bins.map((b) => ({
+                    ...b,
+                    range:
+                      b.low === null || b.high === null
+                        ? null
+                        : [b.low, b.high],
+                  }))}
+                  margin={{ top: 8, right: 14, left: 0, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="from"
+                    type="number"
+                    domain={[past.from, past.to]}
+                    tickFormatter={elapsed}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis
+                    domain={["auto", "auto"]}
+                    width={38}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Area
+                    dataKey="range"
+                    stroke="none"
+                    fill="var(--muted)"
+                    fillOpacity={0.2}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    dataKey="median"
+                    stroke="var(--muted)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    dataKey="currentHr"
+                    stroke="var(--heart)"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) =>
+                      active && payload?.[0] ? (
+                        <div className="chart-tooltip">
+                          {elapsed(payload[0].payload.from)}–
+                          {elapsed(payload[0].payload.to)} · 이번{" "}
+                          {num(payload[0].payload.currentHr)} bpm
+                          <br />
+                          과거 {num(payload[0].payload.low)}–
+                          {num(payload[0].payload.high)} bpm ·{" "}
+                          {payload[0].payload.count}일
+                        </div>
+                      ) : null
+                    }
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="fine">
+              실선: 이번 심박 · 점선: 과거 중앙값 · 옅은 띠: 과거 가운데 50% ·
+              단위 bpm. 과거 5일 미만인 구간은 범위를 표시하지 않아요. 날씨·코스
+              차이는 반영하지 않았어요.
+            </p>
+          </div>
         )}
       </section>
       <section className="journal-section training-answer">

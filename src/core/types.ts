@@ -1,3 +1,6 @@
+import type { RunReview } from "./runReview";
+import type { AutoDiscovery } from "./discovery";
+
 export interface Summary {
   id: string;
   source?: "samsung" | "apple";
@@ -21,7 +24,7 @@ export interface QualityIssue {
   code: string;
   metrics: ("duration" | "distance" | "pace" | "date" | "detail")[];
   evidence: string;
-  action: "review" | "unavailable";
+  action: "review" | "unavailable" | "notice";
   from?: number;
   to?: number;
 }
@@ -101,6 +104,12 @@ export interface Profile extends Weighted {
   observations: Observation[];
   drift: Drift | null;
   windows?: StableWindow[];
+  stabilityVariants?: {
+    context: number;
+    cv: number;
+    windows: StableWindow[];
+  }[];
+  review?: RunReview;
   windowDiagnostics?: Record<string, number>;
   longestRunSec?: number;
   halves?: {
@@ -117,6 +126,7 @@ export interface Dataset {
   profiles: Profile[];
   warnings: string[];
   revision?: number;
+  discoveries?: { heart: AutoDiscovery; pace: AutoDiscovery };
 }
 export type WorkerRequest =
   | { type: "IMPORT"; requestId: number; file: File }

@@ -73,4 +73,18 @@ describe("explicit two-run review", () => {
       }),
     ).toBeNull();
   });
+  it("compares only elapsed intervals observed in both recordings", () => {
+    const current = recording(1200), previous = recording(1200);
+    for (const p of current.points) {
+      if (p.time >= 300 && p.time < 400) { p.hr = 200; p.speed = 5; }
+    }
+    previous.points = previous.points.filter((p) => p.time <= 300 || p.time >= 400);
+    const pair = runPair(current, previous);
+    expect(pair?.current.sec).toBe(800);
+    expect(pair?.previous.sec).toBe(800);
+    expect(pair?.current.hr).toBe(140);
+    expect(pair?.current.pace).toBe(400);
+    expect(pair?.previous.pace).toBe(400);
+    expect(pair?.rows[0]?.currentHr).toBeNull();
+  });
 });

@@ -14,6 +14,8 @@ import {
   suggestComparison,
 } from "../src/core/analysis";
 import { paceDomain } from "../src/core/chart";
+import { discoverComparison } from "../src/core/discovery";
+import { buildPastReference, suggestSimilarRuns } from "../src/core/runReview";
 const path = process.env.RUNOGRAPH_ZIP;
 if (!path) {
   console.error("RUNOGRAPH_ZIP 환경변수로 로컬 ZIP 경로를 지정하세요.");
@@ -52,6 +54,8 @@ for (const s of sessions) {
       })),
     });
     const p = profile(d);
+    assert.ok(p.review!.bins.length <= 60);
+    assert.equal(p.stabilityVariants!.length, 8);
     for (const w of p.windows ?? []) {
       assert.ok(w.sec >= 48 && w.sec <= 60 && w.samples >= 4);
       assert.ok(w.from >= 360 && w.to <= d.points.at(-1)!.time);
@@ -92,6 +96,39 @@ await writeFile(
       aggregate: aggregate(sessions, profiles),
       rawAggregate: aggregate(sessions, profiles, true),
       records,
+      upgrade: (() => {
+        const latest = [...sessions].sort((a, b) => b.startMs - a.startMs)[0];
+        const latestProfile = profiles.find((p) => p.id === latest.id);
+        const past = buildPastReference(latest, sessions, profiles);
+        return {
+          latestDate: latest.date,
+          review: latestProfile?.review,
+          similar: suggestSimilarRuns(latest, sessions, profiles),
+          past: past
+            ? {
+                dates: past.dates,
+                availableMinutes: past.bins.filter((b) => b.low !== null)
+                  .length,
+              }
+            : null,
+          discoveries: (["heart", "pace"] as const).map((q) => {
+            const found = discoverComparison(sessions, profiles, q);
+            return {
+              question: q,
+              searched: found.searched,
+              preferred: found.preferred,
+              alternative: found.alternative && {
+                config: found.alternative.config,
+                state: found.alternative.state,
+                previous: found.alternative.previous.count,
+                recent: found.alternative.recent.count,
+                difference: found.alternative.difference,
+                sensitivity: found.alternative.sensitivity,
+              },
+            };
+          }),
+        };
+      })(),
       comparisons: (["heart", "pace"] as const).map((question) => {
         const cfg = suggestComparison(sessions, profiles, question);
         const start = performance.now();

@@ -6,7 +6,7 @@ import type {
   Summary,
 } from "./types";
 import { datedActivity, usesSummary } from "./quality";
-export const ANALYSIS_VERSION = "0.2.0";
+export const ANALYSIS_VERSION = "0.3.0";
 export const STABILITY_DEFAULTS = {
   context: 120,
   cv: 0.08,
@@ -281,6 +281,23 @@ export function buildStableWindows(d: Detail, cfg = STABILITY_DEFAULTS) {
   diagnostics.accepted = windows.length;
   return { windows, diagnostics };
 }
+/** Cache only stable minute windows; detailed measurements stay out of discovery. */
+export function buildStabilityVariants(d: Detail) {
+  return [90, 120, 180].flatMap((context) => {
+    // Stability rules other than CV are identical. A stricter CV is a subset,
+    // so three scans produce all eight alternatives without retaining raw data.
+    const { windows } = buildStableWindows(d, {
+      ...STABILITY_DEFAULTS,
+      context,
+      cv: 0.12,
+    });
+    return [0.05, 0.08, 0.12].flatMap((cv) =>
+      context === STABILITY_DEFAULTS.context && cv === STABILITY_DEFAULTS.cv
+        ? []
+        : [{ context, cv, windows: windows.filter((w) => w.cv <= cv) }],
+    );
+  });
+}
 export const dayNumber = (date: string) =>
   Date.parse(date + "T00:00:00Z") / 86400000;
 export const dateAt = (day: number) =>
@@ -343,6 +360,9 @@ export interface Comparison {
     min: number;
     max: number;
     variants: number;
+    stabilityVariants: number;
+    bandwidthVariants: number;
+    leaveOneOutVariants: number;
     directionChanged: boolean;
     conditionsChanged: boolean;
   } | null;
@@ -356,6 +376,10 @@ const effective = (weights: number[]) => {
     squares = weights.reduce((a, b) => a + b * b, 0);
   return squares ? (sum * sum) / squares : 0;
 };
+// Floating point averaging can produce differences around 1e-13 for identical
+// observations. Treat only that numerical noise as zero, not as a reversal.
+const direction = (difference: number) =>
+  Math.abs(difference) <= 1e-8 ? 0 : Math.sign(difference);
 export const kernel = (u: number) => (u < 1 ? (1 - u ** 3) ** 3 : 0);
 function candidates(
   sessions: Summary[],
@@ -648,6 +672,43 @@ export function compare(
     const variants: Comparison[] = [];
     for (const width of cfg.question === "heart" ? [0.06, 0.1] : [8, 12])
       variants.push(compare(sessions, profiles, { ...cfg, width }, false));
+    const bandwidthVariants = variants.length;
+    let stabilityVariants = 0;
+    for (const context of [90, 120, 180])
+      for (const cv of [0.05, 0.08, 0.12]) {
+        if (
+          context === STABILITY_DEFAULTS.context &&
+          cv === STABILITY_DEFAULTS.cv
+        )
+          continue;
+        // Old profiles can still be used, but cannot imply that an untested
+        // stability setting was checked. New imports contain the complete cache.
+        if (
+          profiles.some(
+            (p) =>
+              p.windows !== undefined &&
+              !p.stabilityVariants?.some(
+                (v) => v.context === context && v.cv === cv,
+              ),
+          )
+        )
+          continue;
+        variants.push(
+          compare(
+            sessions,
+            profiles.map((p) => ({
+              ...p,
+              windows:
+                p.stabilityVariants?.find(
+                  (v) => v.context === context && v.cv === cv,
+                )?.windows ?? [],
+            })),
+            cfg,
+            false,
+          ),
+        );
+        stabilityVariants++;
+      }
     for (const e of out)
       variants.push(
         compare(
@@ -665,10 +726,13 @@ export function compare(
         min: Math.min(difference, ...diffs),
         max: Math.max(difference, ...diffs),
         variants: variants.length,
+        stabilityVariants,
+        bandwidthVariants,
+        leaveOneOutVariants: out.length,
         directionChanged: variants.some(
           (v) =>
             v.difference !== null &&
-            Math.sign(v.difference) !== Math.sign(difference),
+            direction(v.difference) !== direction(difference),
         ),
         conditionsChanged: variants.some((v) => v.state !== baseState),
       };
@@ -677,13 +741,13 @@ export function compare(
           (v) =>
             v.state !== baseState ||
             (v.difference !== null &&
-              Math.sign(v.difference) !== Math.sign(difference)),
+              direction(v.difference) !== direction(difference)),
         )
       ) {
         state = "sensitive";
         reason.push(
           sensitivityRange.directionChanged
-            ? "비교 범위를 바꾸거나 러닝 하나를 빼면 차이의 방향이 뒤바뀌어요."
+            ? "안정 구간 기준·비교 범위를 바꾸거나 러닝 하나를 빼면 차이의 방향이 뒤바뀌어요."
             : "확인한 설정에서는 차이의 방향이 같았지만, 비교 조건의 충족 여부가 달라졌어요.",
         );
       }
@@ -719,31 +783,10 @@ export function suggestComparison(
   elapsedTo = 1200,
   anchor?: string,
 ): CompareConfig {
-  const eligibleIds = new Set(
-    profiles
-      .filter((p) => {
-        const windows = (p.windows ?? []).filter(
-          (w) => w.from >= elapsedFrom && w.to <= elapsedTo,
-        );
-        return (
-          windows.length >= 3 &&
-          windows.reduce((sum, w) => sum + w.sec, 0) >= 180
-        );
-      })
-      .map((p) => p.id),
-  );
   const knownDates = sessions.filter(
-    (s) =>
-      s.offsetMs !== null &&
-      !s.growthExcluded &&
-      (s.durationMs === null ||
-        s.durationMs >= 60000 ||
-        s.inclusion === "include"),
+    (s) => s.offsetMs !== null && Number.isFinite(dayNumber(s.date)),
   );
   const latest =
-    [...knownDates.filter((s) => eligibleIds.has(s.id))].sort((a, b) =>
-      b.date.localeCompare(a.date),
-    )[0]?.date ??
     [...knownDates].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ??
     sessions[0]?.date ??
     "2000-01-01";
@@ -859,6 +902,15 @@ export const STATE_LABEL: Record<CompareState, string> = {
   insufficient: "기록 부족",
   sensitive: "설정 영향 있음",
 };
+function median(values: number[]) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length
+    ? sorted.length % 2
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2
+    : null;
+}
 export function trainingRows(
   sessions: Summary[],
   profiles: Profile[],
@@ -944,10 +996,7 @@ export function trainingRows(
     ...g,
     days: g.days.size,
     epoch: dayNumber(g.date) * 86400000,
-    durationMedian: quantile(
-      g.durations.map((value) => ({ value, weight: 1 })),
-      0.5,
-    ),
+    durationMedian: median(g.durations),
     durationIqr: [
       quantile(
         g.durations.map((value) => ({ value, weight: 1 })),
@@ -958,10 +1007,7 @@ export function trainingRows(
         0.75,
       ),
     ],
-    longestMedian: quantile(
-      g.longest.map((value) => ({ value, weight: 1 })),
-      0.5,
-    ),
+    longestMedian: median(g.longest),
     longestIqr: [
       quantile(
         g.longest.map((value) => ({ value, weight: 1 })),

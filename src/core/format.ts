@@ -45,6 +45,7 @@ export function issueLabel(code: string) {
         "duration-conflict": "저장된 운동시간 확인 필요",
         "summary-pace-review": "저장된 시간·거리 확인 필요",
         "summary-detail-speed": "저장된 요약과 시간별 속도가 달라요",
+        "summary-detail-average": "요약 페이스와 상세 속도의 출처 차이 있음",
         "observation-gap": "측정이 끊긴 구간 있음",
       } as Record<string, string>
     )[code] ?? "확인할 기록이 있어요"

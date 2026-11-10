@@ -463,6 +463,38 @@ export function RunChart({
           </div>
         </div>
       ))}
+      <section className="run-thirds">
+        <h3>초반 · 중간 · 후반</h3>
+        <div className="thirds-grid">
+          {thirds.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                changeRange(s.from, s.to);
+                setZoom(true);
+              }}
+            >
+              <small>
+                {["초반", "중간", "후반"][i]} · {elapsed(s.from)}–
+                {elapsed(s.to)}
+              </small>
+              <b>
+                {s.hr.coverage >= 0.7
+                  ? `${num(s.hr.mean)} bpm`
+                  : "심박 측정 부족"}
+              </b>
+              <span>
+                {s.speed.coverage >= 0.7
+                  ? `${pace(s.speed.mean ? 1000 / s.speed.mean : null)} /km`
+                  : "속도 측정 부족"}
+              </span>
+              <small>
+                심박 {num(s.hr.sec / 60, 1)}분 · {num(s.hr.coverage * 100)}%
+              </small>
+            </button>
+          ))}
+        </div>
+      </section>
       <div className="readout" data-testid="readout">
         <div className="readout-time">
           {gapCursor !== null
@@ -696,38 +728,6 @@ export function RunChart({
             : "케이던스 측정 부족"}
         </span>
       </div>
-      <section className="run-thirds">
-        <h3>초반 · 중간 · 후반</h3>
-        <div className="thirds-grid">
-          {thirds.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                changeRange(s.from, s.to);
-                setZoom(true);
-              }}
-            >
-              <small>
-                {["초반", "중간", "후반"][i]} · {elapsed(s.from)}–
-                {elapsed(s.to)}
-              </small>
-              <b>
-                {s.hr.coverage >= 0.7
-                  ? `${num(s.hr.mean)} bpm`
-                  : "심박 측정 부족"}
-              </b>
-              <span>
-                {s.speed.coverage >= 0.7
-                  ? `${pace(s.speed.mean ? 1000 / s.speed.mean : null)} /km`
-                  : "속도 측정 부족"}
-              </span>
-              <small>
-                심박 {num(s.hr.sec / 60, 1)}분 · {num(s.hr.coverage * 100)}%
-              </small>
-            </button>
-          ))}
-        </div>
-      </section>
       <div className="movement-track">
         <p className="fine">이동 흐름 · 속도 기준 추정</p>
         <div className="movement-bar" aria-label="추정 이동 구간">
@@ -746,7 +746,8 @@ export function RunChart({
             ))}
         </div>
         <p className="fine">
-          빈 곳은 측정이 없거나 움직임이 짧게 바뀐 구간이에요.
+          속도로 구분한 추정이에요. 짧은 전환도 표시하며, 빈 곳은 측정이 없는
+          구간이에요.
         </p>
       </div>
       {gaps.length > 0 && (

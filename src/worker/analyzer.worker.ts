@@ -2,6 +2,7 @@
 import { Archive, LIMITS } from "../core/archive";
 import { profile } from "../core/metrics";
 import { qualityIssues } from "../core/quality";
+import { discoverComparison } from "../core/discovery";
 import { saveDetail, discardGeneration } from "../core/storage";
 import type {
   InternalSummary,
@@ -67,7 +68,7 @@ async function handle(msg: WorkerRequest) {
           type: "PROGRESS",
           requestId: msg.requestId,
           phase: `러닝 분석 중 · ${i + 1} / ${summaries.length}`,
-          percent: 15 + Math.round(((i + 1) / summaries.length) * 85),
+          percent: 15 + Math.round(((i + 1) / summaries.length) * 80),
         });
       }
       if (summaries.some((s) => s.status === "limited"))
@@ -83,6 +84,19 @@ async function handle(msg: WorkerRequest) {
         },
       );
       send({
+        type: "PROGRESS",
+        requestId: msg.requestId,
+        phase: "함께 볼 과거 기록과 비교 조건을 찾고 있어요",
+        percent: 97,
+      });
+      const discoveries =
+        archive.source === "apple"
+          ? undefined
+          : {
+              heart: discoverComparison(sessions, profiles, "heart"),
+              pace: discoverComparison(sessions, profiles, "pace"),
+            };
+      send({
         type: "DATA",
         requestId: msg.requestId,
         data: {
@@ -91,6 +105,7 @@ async function handle(msg: WorkerRequest) {
           profiles,
           warnings,
           revision: msg.requestId,
+          discoveries,
         },
       });
     } else if (msg.type === "SAVE") {
