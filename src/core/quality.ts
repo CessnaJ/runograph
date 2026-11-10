@@ -59,6 +59,38 @@ export function qualityIssues(s: Summary, d?: Detail): QualityIssue[] {
         "summary-detail-speed",
         "요약 평균속도가 상세 최고속도의 1.5배를 넘어 합계에서 제외해요. 상세 측정이 운동 일부에만 있을 수도 있어요.",
       );
+    // A source discrepancy is an explanation, not evidence that either value is invalid.
+    let observed = 0,
+      distance = 0;
+    const span = d.points.at(-1)?.time ?? 0;
+    for (let i = 0; i < d.points.length - 1; i++) {
+      const p = d.points[i],
+        n = d.points[i + 1],
+        sec = n.time - p.time;
+      if (sec > 0 && sec <= d.gapSec && p.speed !== null && n.speed !== null) {
+        observed += sec;
+        distance += p.speed * sec;
+      }
+    }
+    if (
+      span > 0 &&
+      observed / span >= 0.9 &&
+      observed >= 300 &&
+      s.durationMs &&
+      s.distanceM &&
+      !out.some((q) => q.action === "review")
+    ) {
+      const summarySpeed = s.distanceM / (s.durationMs / 1000);
+      const measuredSpeed = distance / observed;
+      if (summarySpeed > 0 && Math.abs(measuredSpeed / summarySpeed - 1) > 0.1)
+        out.push({
+          code: "summary-detail-average",
+          metrics: ["pace"],
+          action: "notice",
+          evidence:
+            "요약 거리·운동시간으로 구한 페이스와 상세 속도로 구한 페이스가 10% 넘게 달라요. 출처가 다른 값이며 어느 한쪽을 자동으로 수정하거나 합계에서 빼지 않아요.",
+        });
+    }
     for (let i = 1; i < d.points.length; i++)
       if (d.points[i].time - d.points[i - 1].time > d.gapSec) {
         out.push({
@@ -83,7 +115,7 @@ export function usesSummary(
   if (s.inclusion === "exclude") return false;
   const codes = new Set([
     ...(s.quality ?? [])
-      .filter((q) => q.metrics.includes(metric))
+      .filter((q) => q.action === "review" && q.metrics.includes(metric))
       .map((q) => q.code),
     ...s.issues.filter((c) =>
       [

@@ -36,7 +36,7 @@ test("Apple summaries: ZIP/XML, comparison, honest limitations, local restore an
   await expect(
     page.getByRole("region", { name: "최근 러닝 복기" }),
   ).toContainText("145");
-  await page.getByRole("button", { name: "비교할 러닝 고르기 →" }).click();
+  await page.getByRole("button", { name: "직접 고르기 →" }).click();
   await page
     .getByLabel("비교할 러닝", { exact: true })
     .selectOption({ label: "2026-01-01 · 09:00 · 5.00 km" });

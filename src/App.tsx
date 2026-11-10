@@ -129,6 +129,19 @@ function downloadReport(
         },
         reasons: c.reason,
         sensitivity: c.sensitivity,
+        stabilityCheck: {
+          performed: (c.sensitivity?.stabilityVariants ?? 0) > 0,
+          testedVariants: c.sensitivity?.stabilityVariants ?? 0,
+          contextsSec:
+            (c.sensitivity?.stabilityVariants ?? 0) > 0 ? [90, 120, 180] : [],
+          speedCv:
+            (c.sensitivity?.stabilityVariants ?? 0) > 0
+              ? [0.05, 0.08, 0.12]
+              : [],
+          baselineContextSec: 120,
+          baselineSpeedCv: 0.08,
+          rangeMeaning: "확인한 설정에 따른 관측 차이의 범위 · 신뢰구간 아님",
+        },
       };
     }),
     sessions: sessions.map((s) => ({
@@ -523,6 +536,7 @@ export default function App() {
         ? {
             ...old,
             revision: (old.revision ?? 0) + 1,
+            discoveries: undefined,
             sessions: old.sessions.map((s) =>
               s.id === id ? { ...s, ...updates } : s,
             ),
@@ -583,8 +597,8 @@ export default function App() {
       setPairError("측정값을 다시 읽으려면 ZIP을 선택해 주세요.");
     }
   }
-  function startComparison(id: string) {
-    selectPair([id, ""]);
+  function startComparison(id: string, comparedId = "") {
+    selectPair([id, comparedId]);
     changeTab("compare");
   }
   function saveLocally() {
@@ -924,6 +938,20 @@ export default function App() {
                     sessions={sessions}
                     profiles={data.profiles}
                     revision={data.revision ?? 0}
+                    initialDiscovery={
+                      !from && !to && !query
+                        ? data.discoveries?.[
+                            growthView === "pace" ? "pace" : "heart"
+                          ]
+                        : undefined
+                    }
+                    relatedDiscovery={
+                      !from && !to && !query
+                        ? data.discoveries?.[
+                            growthView === "pace" ? "heart" : "pace"
+                          ]
+                        : undefined
+                    }
                     onOpen={openRun}
                     config={growthConfig}
                     onConfig={setGrowthConfig}
@@ -941,6 +969,7 @@ export default function App() {
               {tab === "compare" && (
                 <RunComparison
                   sessions={data.sessions}
+                  profiles={data.profiles}
                   ids={pairIds}
                   details={pairDetails}
                   loading={pairLoading}
@@ -999,6 +1028,14 @@ export default function App() {
                         <p className="fine">
                           요약 평균 심박 {num(selected.meanHr)} bpm · 최대 심박{" "}
                           {num(selected.maxHr)} bpm
+                        </p>
+                      )}
+                      {selected.quality?.some(
+                        (q) => q.code === "summary-detail-average",
+                      ) && (
+                        <p className="source-note">
+                          요약 페이스와 상세 속도에 차이가 있어요. 그래프는 상세
+                          측정 기준이에요.
                         </p>
                       )}
                     </div>

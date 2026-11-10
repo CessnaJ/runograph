@@ -322,7 +322,7 @@ input[type="date"] {
 }
 .filter-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin: 14px 0;
 }
@@ -331,6 +331,12 @@ input[type="date"] {
   flex-direction: column;
   gap: 5px;
   font-size: 12px;
+  min-width: 0;
+}
+.filter-fields input,
+.filter-fields select {
+  width: 100%;
+  max-width: 100%;
 }
 .filter-fields .search-field {
   grid-column: span 2;
@@ -1077,7 +1083,7 @@ select {
 .comparison-controls,
 .list-controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin: 18px 0;
 }
@@ -1087,6 +1093,7 @@ select {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+  min-width: 0;
 }
 .comparison-controls strong {
   font-size: 22px;
@@ -1511,6 +1518,18 @@ select {
   min-width: 0;
   font-size: 14px;
 }
+.pair-picker {
+  margin: 12px 0;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 8px;
+}
+.pair-picker > summary {
+  min-height: 44px;
+  color: var(--muted);
+}
+.pair-picker .pair-selectors {
+  margin: 10px 0;
+}
 .pair-answer {
   margin: 26px 0 22px;
 }
@@ -1581,5 +1600,187 @@ select {
   .pair-selectors {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+}
+
+/* Show the observation first; detailed controls keep their existing disclosure. */
+.review-evidence {
+  margin-top: 20px;
+}
+.review-heading {
+  margin: 14px 0;
+}
+.review-compact {
+  padding-top: 0;
+}
+.review-compact .recap-stats {
+  padding: 4px 0 14px;
+}
+.review-compact .review-headline {
+  font-size: 20px;
+  line-height: 1.5;
+  margin-top: 14px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.review-compact .review-source-note {
+  margin: 8px 0;
+}
+.review-compact .review-readout {
+  margin: 8px 0 10px;
+  gap: 4px 18px;
+}
+.review-compact .review-chart-legend {
+  margin: 4px 0 8px;
+}
+.review-compact .review-detail-action {
+  margin-top: 4px;
+}
+.review-compact .review-evidence {
+  margin-top: 10px;
+}
+.review-measurement-details summary {
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 36px;
+}
+.review-coverage {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.review-chart-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 4px;
+}
+.review-mini-chart,
+.past-chart {
+  min-width: 0;
+  width: 100%;
+}
+.run-recap .review-mini-chart .fine,
+.past-reference .fine {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 8px 0;
+}
+.review-source-note,
+.source-note {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+  padding-left: 10px;
+  border-left: 2px solid var(--rule);
+  margin: 12px 0;
+}
+.similar-primary {
+  margin: 16px 0 8px;
+}
+.similar-primary .fine,
+.similar-candidates > .fine {
+  font-size: 12px;
+  margin: 8px 0;
+}
+.similar-candidates {
+  margin: 16px 0 22px;
+}
+.similar-candidate-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.similar-candidate-buttons button {
+  font-variant-numeric: tabular-nums;
+}
+.past-reference {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+.past-reference h3 {
+  font-size: 15px;
+  font-weight: 500;
+}
+.analysis-support {
+  padding: 10px 0 14px;
+}
+.analysis-support .period-caption {
+  margin: 6px 0;
+}
+.analysis-setting-range {
+  margin: 14px 0 4px;
+}
+.analysis-setting-range > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.analysis-setting-range > strong {
+  display: block;
+  font-size: clamp(20px, 4.6vw, 28px);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+.analysis-setting-range .fine {
+  font-size: 12px;
+}
+.analysis-selection-notice {
+  background: var(--wash);
+  padding: 14px;
+  margin: 8px 0 16px;
+  font-size: 13px;
+}
+.analysis-selection-notice button {
+  margin-top: 10px;
+}
+.discovery-card {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin: 16px 0 20px;
+  padding: 18px 0;
+}
+.discovery-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.discovery-card h3 {
+  font-size: 17px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.discovery-card p {
+  margin: 8px 0;
+}
+.discovery-card .fine,
+.discovery-support {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.discovery-observation {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.discovery-card button {
+  margin: 6px 0;
+}
+.analysis-observed-values .period-values {
+  padding-top: 10px;
+}
+.run-thirds {
+  margin-top: 12px;
+}
+@media (max-width: 380px) {
+  .similar-candidate-buttons {
+    gap: 6px;
+  }
+  .similar-candidate-buttons button {
+    padding-inline: 9px;
+    font-size: 12px;
   }
 }

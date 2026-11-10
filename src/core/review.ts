@@ -43,19 +43,46 @@ export function pairedStats(detail: Detail, from: number, to: number) {
   };
 }
 
+function commonStats(current: Detail, previous: Detail, from: number, to: number) {
+  const observed = (d: Detail) => intervals(d, from, to).filter(
+    (v) => v.hr !== null && v.speed !== null,
+  );
+  const a = observed(current), b = observed(previous);
+  let i = 0, j = 0, sec = 0, currentHr = 0, previousHr = 0,
+    currentSpeed = 0, previousSpeed = 0;
+  while (i < a.length && j < b.length) {
+    const x = a[i], y = b[j];
+    const overlap = Math.max(0, Math.min(x.to, y.to) - Math.max(x.from, y.from));
+    if (overlap) {
+      sec += overlap;
+      currentHr += x.hr! * overlap;
+      previousHr += y.hr! * overlap;
+      currentSpeed += x.speed! * overlap;
+      previousSpeed += y.speed! * overlap;
+    }
+    if (x.to <= y.to) i++;
+    if (y.to <= x.to) j++;
+  }
+  const coverage = to > from ? sec / (to - from) : 0;
+  const result = (hr: number, speed: number) => ({
+    sec, coverage,
+    hr: coverage >= 0.7 && sec > 0 ? hr / sec : null,
+    pace: coverage >= 0.7 && speed > 0 ? 1000 * sec / speed : null,
+  });
+  return { current: result(currentHr, currentSpeed), previous: result(previousHr, previousSpeed) };
+}
+
 export function runPair(current: Detail, previous: Detail) {
   const a = primaryRange(current),
     b = primaryRange(previous);
   const from = Math.max(300, a[0], b[0]);
   const to = Math.min(a[1], b[1], from + 900);
   if (to - from < 300) return null;
-  const first = pairedStats(current, from, to),
-    second = pairedStats(previous, from, to);
+  const common = commonStats(current, previous, from, to);
   const rows = [];
   for (let start = from; start < to; start += 60) {
     const end = Math.min(start + 60, to);
-    const a = pairedStats(current, start, end),
-      b = pairedStats(previous, start, end);
+    const { current: a, previous: b } = commonStats(current, previous, start, end);
     rows.push({
       time: start,
       currentHr: a.hr,
@@ -64,5 +91,5 @@ export function runPair(current: Detail, previous: Detail) {
       previousPace: b.pace,
     });
   }
-  return { from, to, current: first, previous: second, rows };
+  return { from, to, ...common, rows };
 }
